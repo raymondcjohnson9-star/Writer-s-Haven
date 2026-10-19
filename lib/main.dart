@@ -1,71 +1,121 @@
+import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+const String storageKey = 'writers_haven_saved_data';
 
 void main() {
   runApp(const WritersHavenApp());
 }
 
+// Each available theme has a name and a color.
 class HavenTheme {
   final String name;
-  final Color primary;
-  final Color background;
-  final Color surface;
-  final bool isDark;
+  final Color color;
+  final Brightness brightness;
 
-  const HavenTheme({
-    required this.name,
-    required this.primary,
-    required this.background,
-    required this.surface,
-    this.isDark = false,
-  });
+  const HavenTheme(this.name, this.color, this.brightness);
 }
 
 const List<HavenTheme> havenThemes = [
-  HavenTheme(
-    name: 'Royal Purple',
-    primary: Color(0xFF7046A5),
-    background: Color(0xFFF8F5FC),
-    surface: Colors.white,
-  ),
-  HavenTheme(
-    name: 'Emerald Garden',
-    primary: Color(0xFF187A58),
-    background: Color(0xFFF1F8F4),
-    surface: Colors.white,
-  ),
-  HavenTheme(
-    name: 'Midnight Blue',
-    primary: Color(0xFF3159A5),
-    background: Color(0xFFF2F5FC),
-    surface: Colors.white,
-  ),
-  HavenTheme(
-    name: 'Rose Blush',
-    primary: Color(0xFFB94F78),
-    background: Color(0xFFFFF4F7),
-    surface: Colors.white,
-  ),
-  HavenTheme(
-    name: 'Autumn Pages',
-    primary: Color(0xFF9B5A2B),
-    background: Color(0xFFFBF5ED),
-    surface: Colors.white,
-  ),
-  HavenTheme(
-    name: 'Pure Black',
-    primary: Color(0xFFB69AFF),
-    background: Color(0xFF121212),
-    surface: Color(0xFF222222),
-    isDark: true,
-  ),
-  HavenTheme(
-    name: 'Clean White',
-    primary: Color(0xFF45415C),
-    background: Colors.white,
-    surface: Color(0xFFF7F7FA),
-  ),
+  HavenTheme('Royal Purple', Color(0xFF7045A5), Brightness.light),
+  HavenTheme('Emerald Garden', Color(0xFF16866A), Brightness.light),
+  HavenTheme('Midnight Blue', Color(0xFF243B64), Brightness.light),
+  HavenTheme('Rose Blush', Color(0xFFCE718D), Brightness.light),
+  HavenTheme('Autumn Pages', Color(0xFFAD6334), Brightness.light),
+  HavenTheme('Pure Black', Color(0xFF151515), Brightness.dark),
+  HavenTheme('Clean White', Color(0xFF777777), Brightness.light),
 ];
+
+// A chapter stores its title and written content.
+class Chapter {
+  final int id;
+  String title;
+  String content;
+
+  Chapter({
+    required this.id,
+    required this.title,
+    this.content = '',
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'content': content,
+    };
+  }
+
+  factory Chapter.fromJson(Map<String, dynamic> json) {
+    return Chapter(
+      id: json['id'] as int,
+      title: json['title'] as String? ?? 'Untitled Chapter',
+      content: json['content'] as String? ?? '',
+    );
+  }
+}
+
+// A book stores its details and all its chapters.
+class Book {
+  final int id;
+  String title;
+  String description;
+  List<Chapter> chapters;
+
+  Book({
+    required this.id,
+    required this.title,
+    this.description = '',
+    List<Chapter>? chapters,
+  }) : chapters = chapters ?? [];
+
+  int get totalWords {
+    return chapters.fold(
+      0,
+      (total, chapter) => total + countWords(chapter.content),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'description': description,
+      'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
+    };
+  }
+
+  factory Book.fromJson(Map<String, dynamic> json) {
+    final savedChapters = json['chapters'] as List<dynamic>? ?? [];
+
+    return Book(
+      id: json['id'] as int,
+      title: json['title'] as String? ?? 'Untitled Book',
+      description: json['description'] as String? ?? '',
+      chapters: savedChapters
+          .map(
+            (chapter) => Chapter.fromJson(
+              Map<String, dynamic>.from(chapter as Map),
+            ),
+          )
+          .toList(),
+    );
+  }
+}
+
+// Counts words in a piece of text.
+int countWords(String text) {
+  final trimmed = text.trim();
+
+  if (trimmed.isEmpty) {
+    return 0;
+  }
+
+  return trimmed.split(RegExp(r'\s+')).length;
+}
 
 class WritersHavenApp extends StatefulWidget {
   const WritersHavenApp({super.key});
@@ -75,425 +125,622 @@ class WritersHavenApp extends StatefulWidget {
 }
 
 class _WritersHavenAppState extends State<WritersHavenApp> {
-  int selectedIndex = 0;
-  int selectedThemeIndex = 0;
+  int selectedTab = 0;
+  int selectedTheme = 0;
+  int nextBookId = 1;
+  int nextChapterId = 1;
 
-  final List<NavigationDestination> destinations = const [
-    NavigationDestination(
-      icon: Icon(Icons.home_outlined),
-      selectedIcon: Icon(Icons.home_rounded),
-      label: 'Home',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.menu_book_outlined),
-      selectedIcon: Icon(Icons.menu_book_rounded),
-      label: 'My Books',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.calendar_month_outlined),
-      selectedIcon: Icon(Icons.calendar_month_rounded),
-      label: 'Calendar',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.lightbulb_outline_rounded),
-      selectedIcon: Icon(Icons.lightbulb_rounded),
-      label: 'Ideas',
-    ),
-    NavigationDestination(
-      icon: Icon(Icons.person_outline_rounded),
-      selectedIcon: Icon(Icons.person_rounded),
-      label: 'Profile',
-    ),
-  ];
+  List<Book> books = [];
+  bool isLoading = true;
+  bool saveFailed = false;
+
+  Timer? saveTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    loadSavedData();
+  }
+
+  // Loads saved books and settings when the app starts.
+  Future<void> loadSavedData() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final savedText = preferences.getString(storageKey);
+
+      if (savedText != null) {
+        final data = jsonDecode(savedText) as Map<String, dynamic>;
+
+        final savedBooks = data['books'] as List<dynamic>? ?? [];
+
+        books = savedBooks
+            .map(
+              (book) => Book.fromJson(
+                Map<String, dynamic>.from(book as Map),
+              ),
+            )
+            .toList();
+
+        selectedTheme = (data['selectedTheme'] as int?) ?? 0;
+
+        nextBookId = (data['nextBookId'] as int?) ?? 1;
+        nextChapterId = (data['nextChapterId'] as int?) ?? 1;
+
+        if (selectedTheme < 0 || selectedTheme >= havenThemes.length) {
+          selectedTheme = 0;
+        }
+
+        for (final book in books) {
+          if (book.id >= nextBookId) {
+            nextBookId = book.id + 1;
+          }
+
+          for (final chapter in book.chapters) {
+            if (chapter.id >= nextChapterId) {
+              nextChapterId = chapter.id + 1;
+            }
+          }
+        }
+      }
+    } catch (error) {
+      debugPrint('Could not load saved data: $error');
+    }
+
+    if (mounted) {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  // Waits briefly after a change before saving.
+  // This prevents a save operation for every single keystroke.
+  void scheduleSave() {
+    saveTimer?.cancel();
+
+    saveTimer = Timer(
+      const Duration(milliseconds: 500),
+      saveData,
+    );
+  }
+
+  // Saves books, chapters, and the selected theme on the phone.
+  Future<void> saveData() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+
+      final data = {
+        'books': books.map((book) => book.toJson()).toList(),
+        'selectedTheme': selectedTheme,
+        'nextBookId': nextBookId,
+        'nextChapterId': nextChapterId,
+      };
+
+      final success = await preferences.setString(
+        storageKey,
+        jsonEncode(data),
+      );
+
+      if (mounted) {
+        setState(() {
+          saveFailed = !success;
+        });
+      }
+    } catch (error) {
+      debugPrint('Could not save data: $error');
+
+      if (mounted) {
+        setState(() {
+          saveFailed = true;
+        });
+      }
+    }
+  }
+
+  void createBook(String title, String description) {
+    if (title.trim().isEmpty) return;
+
+    final firstChapter = Chapter(
+      id: nextChapterId++,
+      title: 'Chapter 1',
+    );
+
+    setState(() {
+      books.add(
+        Book(
+          id: nextBookId++,
+          title: title.trim(),
+          description: description.trim(),
+          chapters: [firstChapter],
+        ),
+      );
+    });
+
+    scheduleSave();
+  }
+
+  void deleteBook(Book book) {
+    setState(() {
+      books.removeWhere((item) => item.id == book.id);
+    });
+
+    scheduleSave();
+  }
+
+  void addChapter(Book book) {
+    setState(() {
+      book.chapters.add(
+        Chapter(
+          id: nextChapterId++,
+          title: 'Chapter ${book.chapters.length + 1}',
+        ),
+      );
+    });
+
+    scheduleSave();
+  }
+
+  void deleteChapter(Book book, Chapter chapter) {
+    if (book.chapters.length <= 1) return;
+
+    setState(() {
+      book.chapters.removeWhere((item) => item.id == chapter.id);
+    });
+
+    scheduleSave();
+  }
+
+  void updateChapterTitle(
+    Book book,
+    Chapter chapter,
+    String title,
+  ) {
+    chapter.title = title;
+    scheduleSave();
+  }
+
+  void updateChapterContent(
+    Book book,
+    Chapter chapter,
+    String content,
+  ) {
+    chapter.content = content;
+    scheduleSave();
+  }
+
+  void changeTheme(int index) {
+    setState(() {
+      selectedTheme = index;
+    });
+
+    scheduleSave();
+  }
+
+  @override
+  void dispose() {
+    saveTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final currentTheme = havenThemes[selectedThemeIndex];
-
-    final colors = ColorScheme.fromSeed(
-      seedColor: currentTheme.primary,
-      brightness:
-          currentTheme.isDark ? Brightness.dark : Brightness.light,
-      surface: currentTheme.surface,
-    );
+    final theme = havenThemes[selectedTheme];
 
     final pages = [
-      const HomeScreen(),
-      const BooksScreen(),
-      const CalendarScreen(),
-      const IdeasScreen(),
-      ProfileScreen(
-        selectedThemeIndex: selectedThemeIndex,
-        onThemeSelected: (index) {
+      HomeScreen(
+        books: books,
+        onOpenBooks: () {
           setState(() {
-            selectedThemeIndex = index;
+            selectedTab = 1;
           });
         },
+      ),
+      BooksScreen(
+        books: books,
+        onCreateBook: createBook,
+        onDeleteBook: deleteBook,
+        onAddChapter: addChapter,
+        onDeleteChapter: deleteChapter,
+        onUpdateChapterTitle: updateChapterTitle,
+        onUpdateChapterContent: updateChapterContent,
+      ),
+      const SimpleScreen(
+        title: 'Calendar',
+        subtitle: 'Your writing schedule will live here.',
+        icon: Icons.calendar_month,
+      ),
+      const SimpleScreen(
+        title: 'Ideas',
+        subtitle: 'Keep your story ideas organised.',
+        icon: Icons.lightbulb_outline,
+      ),
+      ProfileScreen(
+        selectedTheme: selectedTheme,
+        onThemeChanged: changeTheme,
+        saveFailed: saveFailed,
       ),
     ];
 
     return MaterialApp(
-      title: 'Writers Haven',
       debugShowCheckedModeBanner: false,
+      title: 'Writers Haven',
       theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: colors,
-        scaffoldBackgroundColor: currentTheme.background,
-        appBarTheme: AppBarTheme(
-          backgroundColor: currentTheme.background,
-          foregroundColor: currentTheme.isDark
-              ? Colors.white
-              : const Color(0xFF24212B),
-          elevation: 0,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: theme.color,
+          brightness: theme.brightness,
         ),
-        cardTheme: CardThemeData(
-          color: currentTheme.surface,
-          elevation: 1,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+        useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
         ),
       ),
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            destinations[selectedIndex].label,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 25,
-            ),
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16),
-              child: Center(
-                child: Icon(
-                  Icons.auto_stories_rounded,
-                  color: currentTheme.primary,
-                  size: 28,
+      home: isLoading
+          ? const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            )
+          : Scaffold(
+              body: SafeArea(
+                child: IndexedStack(
+                  index: selectedTab,
+                  children: pages,
                 ),
               ),
-            ),
-          ],
-        ),
-        body: SafeArea(
-          child: IndexedStack(
-            index: selectedIndex,
-            children: pages,
-          ),
-        ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: selectedIndex,
-          onDestinationSelected: (index) {
-            setState(() {
-              selectedIndex = index;
-            });
-          },
-          destinations: destinations,
-        ),
-      ),
-    );
-  }
-}
-
-class HavenPage extends StatelessWidget {
-  final List<Widget> children;
-
-  const HavenPage({super.key, required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 8, 20, 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: children,
-      ),
-    );
-  }
-}
-
-class HavenCard extends StatelessWidget {
-  final String title;
-  final Widget child;
-  final IconData? icon;
-
-  const HavenCard({
-    super.key,
-    required this.title,
-    required this.child,
-    this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                if (icon != null) ...[
-                  Icon(icon, color: colors.primary),
-                  const SizedBox(width: 10),
-                ],
-                Expanded(
-                  child: Text(
-                    title,
-                    style: TextStyle(
-                      color: colors.primary,
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                    ),
+              bottomNavigationBar: NavigationBar(
+                selectedIndex: selectedTab,
+                onDestinationSelected: (index) {
+                  setState(() {
+                    selectedTab = index;
+                  });
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home),
+                    label: 'Home',
                   ),
-                ),
-              ],
+                  NavigationDestination(
+                    icon: Icon(Icons.menu_book_outlined),
+                    selectedIcon: Icon(Icons.menu_book),
+                    label: 'My Books',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.calendar_month_outlined),
+                    label: 'Calendar',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.lightbulb_outline),
+                    label: 'Ideas',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline),
+                    label: 'Profile',
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 14),
-            child,
-          ],
-        ),
-      ),
     );
   }
 }
 
 class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+  final List<Book> books;
+  final VoidCallback onOpenBooks;
+
+  const HomeScreen({
+    super.key,
+    required this.books,
+    required this.onOpenBooks,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+    final totalWords = books.fold<int>(
+      0,
+      (total, book) => total + book.totalWords,
+    );
 
-    return HavenPage(
-      children: [
-        const SizedBox(height: 8),
-        Text(
-          'WRITERS HAVEN',
-          style: TextStyle(
-            color: colors.primary,
-            letterSpacing: 2.5,
-            fontWeight: FontWeight.bold,
-            fontSize: 12,
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Writers Haven'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          Text(
+            'Welcome back, writer.',
+            style: Theme.of(context).textTheme.headlineSmall,
           ),
-        ),
-        const SizedBox(height: 14),
-        const Text(
-          'Your stories deserve a home.',
-          style: TextStyle(
-            fontSize: 23,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'A quiet space to plan, write and bring your ideas to life.',
-          style: TextStyle(
-            color: colors.onSurfaceVariant,
-            height: 1.5,
-          ),
-        ),
-        const SizedBox(height: 24),
-        HavenCard(
-          title: "Today's Writing Goal",
-          icon: Icons.edit_note_rounded,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 8),
+          const Text('Your stories deserve a place to grow.'),
+          const SizedBox(height: 24),
+          Row(
             children: [
-              const Text('Your daily writing progress will appear here.'),
-              const SizedBox(height: 14),
-              Text(
-                '0 / 500 words',
-                style: TextStyle(
-                  color: colors.primary,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
+              Expanded(
+                child: _StatCard(
+                  label: 'My Books',
+                  value: '${books.length}',
+                  icon: Icons.menu_book,
                 ),
               ),
-              const SizedBox(height: 10),
-              const LinearProgressIndicator(value: 0),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  label: 'Words Written',
+                  value: '$totalWords',
+                  icon: Icons.edit_note,
+                ),
+              ),
             ],
           ),
+          const SizedBox(height: 24),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Your writing space',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Create a book, organise its chapters, '
+                    'and keep writing. Your changes are '
+                    'automatically saved on this phone.',
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: onOpenBooks,
+                    icon: const Icon(Icons.arrow_forward),
+                    label: const Text('Open My Books'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Recent books',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          if (books.isEmpty)
+            const Card(
+              child: ListTile(
+                leading: Icon(Icons.auto_stories),
+                title: Text('No books yet'),
+                subtitle: Text('Create your first story in My Books.'),
+              ),
+            )
+          else
+            ...books.reversed.take(3).map(
+                  (book) => Card(
+                    child: ListTile(
+                      leading: const Icon(Icons.menu_book),
+                      title: Text(book.title),
+                      subtitle: Text(
+                        '${book.chapters.length} chapters · '
+                        '${book.totalWords} words',
+                      ),
+                    ),
+                  ),
+                ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 28),
+            const SizedBox(height: 12),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+            Text(label),
+          ],
         ),
-        const HavenCard(
-          title: 'Your Library',
-          icon: Icons.library_books_rounded,
-          child: Text('Your books and writing projects will appear here.'),
-        ),
-        const HavenCard(
-          title: 'Continue Writing',
-          icon: Icons.auto_stories_rounded,
-          child: Text('Your latest writing projects will appear here.'),
-        ),
-      ],
+      ),
     );
   }
 }
 
 class BooksScreen extends StatelessWidget {
-  const BooksScreen({super.key});
+  final List<Book> books;
+  final void Function(String, String) onCreateBook;
+  final void Function(Book) onDeleteBook;
+  final void Function(Book) onAddChapter;
+  final void Function(Book, Chapter) onDeleteChapter;
+  final void Function(Book, Chapter, String) onUpdateChapterTitle;
+  final void Function(Book, Chapter, String) onUpdateChapterContent;
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return HavenPage(
-      children: [
-        const SizedBox(height: 8),
-        const Text(
-          'Every great story starts somewhere.',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 20),
-        HavenCard(
-          title: 'Your Books',
-          icon: Icons.menu_book_rounded,
-          child: Column(
-            children: [
-              Icon(
-                Icons.auto_stories_rounded,
-                size: 48,
-                color: colors.primary,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Your personal library will live here.',
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Next, we will add book creation, chapters, '
-                'drafts and editing.',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class CalendarScreen extends StatelessWidget {
-  const CalendarScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return HavenPage(
-      children: const [
-        SizedBox(height: 8),
-        Text(
-          'Make room for your next chapter.',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        SizedBox(height: 20),
-        HavenCard(
-          title: 'Writing Calendar',
-          icon: Icons.calendar_month_rounded,
-          child: Text(
-            'Your writing sessions, chapter deadlines and important '
-            'dates will appear here.',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class IdeasScreen extends StatelessWidget {
-  const IdeasScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-
-    return HavenPage(
-      children: [
-        const SizedBox(height: 8),
-        const Text(
-          'Catch the ideas before they disappear.',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 20),
-        HavenCard(
-          title: 'A Little Inspiration',
-          icon: Icons.lightbulb_rounded,
-          child: Text(
-            'What secret is your main character afraid someone will discover?',
-            style: TextStyle(
-              fontSize: 16,
-              height: 1.5,
-              color: colors.onSurface,
-            ),
-          ),
-        ),
-        const HavenCard(
-          title: 'Your Idea Notebook',
-          icon: Icons.note_alt_rounded,
-          child: Text(
-            'Your saved story ideas and writing prompts will live here.',
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class ProfileScreen extends StatelessWidget {
-  final int selectedThemeIndex;
-  final ValueChanged<int> onThemeSelected;
-
-  const ProfileScreen({
+  const BooksScreen({
     super.key,
-    required this.selectedThemeIndex,
-    required this.onThemeSelected,
+    required this.books,
+    required this.onCreateBook,
+    required this.onDeleteBook,
+    required this.onAddChapter,
+    required this.onDeleteChapter,
+    required this.onUpdateChapterTitle,
+    required this.onUpdateChapterContent,
   });
 
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
+  Future<void> showCreateBookDialog(BuildContext context) async {
+    final titleController = TextEditingController();
+    final descriptionController = TextEditingController();
 
-    return HavenPage(
-      children: [
-        const SizedBox(height: 8),
-        const HavenCard(
-          title: 'Your Profile',
-          icon: Icons.person_rounded,
-          child: Text(
-            'Your account, writing preferences and settings will appear here.',
-          ),
-        ),
-        HavenCard(
-          title: 'Choose Your Theme',
-          icon: Icons.palette_rounded,
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Create a book'),
+        content: SingleChildScrollView(
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              for (var index = 0; index < havenThemes.length; index++)
-                RadioListTile<int>(
-                  value: index,
-                  groupValue: selectedThemeIndex,
-                  onChanged: (value) {
-                    if (value != null) {
-                      onThemeSelected(value);
-                    }
-                  },
-                  activeColor: colors.primary,
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(havenThemes[index].name),
-                  secondary: CircleAvatar(
-                    radius: 12,
-                    backgroundColor: havenThemes[index].primary,
-                  ),
+              TextField(
+                controller: titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Book title',
+                  hintText: 'Enter your story title',
                 ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descriptionController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                ),
+              ),
             ],
           ),
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (titleController.text.trim().isEmpty) return;
+
+              onCreateBook(
+                titleController.text,
+                descriptionController.text,
+              );
+
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Create'),
+          ),
+        ],
+      ),
     );
+
+    titleController.dispose();
+    descriptionController.dispose();
   }
-}
+
+  Future<void> confirmDeleteBook(
+    BuildContext context,
+    Book book,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete this book?'),
+        content: Text(
+          '“${book.title}” and all its chapters will be deleted '
+          'from this phone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      onDeleteBook(book);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Books'),
+        actions: [
+          IconButton(
+            onPressed: () => showCreateBookDialog(context),
+            tooltip: 'Create book',
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+      body: books.isEmpty
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.menu_book, size: 64),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Your bookshelf is waiting.',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text('Create your first book to get started.'),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: () => showCreateBookDialog(context),
+                      icon: const Icon(Icons.add),
+                      label: const Text('Create a book'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.all(12),
+              itemCount: books.length,
+              itemBuilder: (context, index) {
+                final book = books[index];
+
+                return Card(
+                  child: ListTile(
+                    leading: const CircleAvatar(
+                      child: Icon(Icons.menu_book),
+                    ),
+                    title: Text(book.title),
+                    subtitle: Text(
+                      '${book.chapters.length} chapters · '
+                      '${book.totalWords} words',
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => BookWorkspace(
+                            book: book,
+                            onAddChapter: () => onAddChapter(book),
+                            onDeleteChapter: (chapter) =>
+                                onDeleteChapter(book, chapter),
+                            
