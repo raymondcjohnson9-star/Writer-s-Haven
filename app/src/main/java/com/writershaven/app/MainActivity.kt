@@ -15,18 +15,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -62,7 +62,8 @@ data class HavenTheme(
     val name: String,
     val primary: Color,
     val background: Color,
-    val surface: Color
+    val surface: Color,
+    val isDark: Boolean = false
 )
 
 data class HavenTab(
@@ -75,49 +76,49 @@ private val havenThemes = listOf(
         "Royal Purple",
         Color(0xFF7046A5),
         Color(0xFFF8F5FC),
-        Color(0xFFFFFFFF)
+        Color.White
     ),
     HavenTheme(
         "Emerald Garden",
         Color(0xFF187A58),
         Color(0xFFF1F8F4),
-        Color(0xFFFFFFFF)
+        Color.White
     ),
     HavenTheme(
         "Midnight Blue",
         Color(0xFF3159A5),
         Color(0xFFF2F5FC),
-        Color(0xFFFFFFFF)
+        Color.White
     ),
     HavenTheme(
         "Rose Blush",
         Color(0xFFB94F78),
         Color(0xFFFFF4F7),
-        Color(0xFFFFFFFF)
+        Color.White
     ),
     HavenTheme(
         "Autumn Pages",
         Color(0xFF9B5A2B),
         Color(0xFFFBF5ED),
-        Color(0xFFFFFFFF)
+        Color.White
     ),
     HavenTheme(
         "Pure Black",
         Color(0xFFB69AFF),
         Color(0xFF121212),
-        Color(0xFF222222)
+        Color(0xFF222222),
+        true
     ),
     HavenTheme(
         "Clean White",
         Color(0xFF45415C),
-        Color(0xFFFFFFFF),
+        Color.White,
         Color(0xFFF7F7FA)
     )
 )
 
 @Composable
 fun WritersHavenApp() {
-
     var selectedTab by remember {
         mutableStateOf("Home")
     }
@@ -138,22 +139,25 @@ fun WritersHavenApp() {
         HavenTab("Profile", Icons.Filled.Person)
     )
 
-    val colorScheme = lightColorScheme(
-        primary = currentTheme.primary,
-        secondary = currentTheme.primary,
-        background = currentTheme.background,
-        surface = currentTheme.surface,
-        onBackground = if (selectedThemeName == "Pure Black") {
-            Color.White
-        } else {
-            Color(0xFF24212B)
-        },
-        onSurface = if (selectedThemeName == "Pure Black") {
-            Color.White
-        } else {
-            Color(0xFF24212B)
-        }
-    )
+    val colorScheme = if (currentTheme.isDark) {
+        androidx.compose.material3.darkColorScheme(
+            primary = currentTheme.primary,
+            secondary = currentTheme.primary,
+            background = currentTheme.background,
+            surface = currentTheme.surface,
+            onBackground = Color.White,
+            onSurface = Color.White
+        )
+    } else {
+        lightColorScheme(
+            primary = currentTheme.primary,
+            secondary = currentTheme.primary,
+            background = currentTheme.background,
+            surface = currentTheme.surface,
+            onBackground = Color(0xFF24212B),
+            onSurface = Color(0xFF24212B)
+        )
+    }
 
     MaterialTheme(colorScheme = colorScheme) {
         Surface(
@@ -173,7 +177,7 @@ fun WritersHavenApp() {
                                     selectedTab = tab.title
                                 },
                                 icon = {
-                                    androidx.compose.material3.Icon(
+                                    Icon(
                                         imageVector = tab.icon,
                                         contentDescription = tab.title
                                     )
@@ -189,7 +193,6 @@ fun WritersHavenApp() {
                     }
                 }
             ) { innerPadding ->
-
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -222,8 +225,8 @@ fun WritersHavenApp() {
                         "Ideas" -> IdeasScreen()
                         "Profile" -> ProfileScreen(
                             selectedThemeName = selectedThemeName,
-                            onThemeSelected = {
-                                selectedThemeName = it
+                            onThemeSelected = { themeName ->
+                                selectedThemeName = themeName
                             }
                         )
                     }
@@ -251,7 +254,9 @@ fun HomeScreen() {
 
     HavenCard(title = "Today's Writing Goal") {
         Text("Your daily writing progress will appear here.")
+
         Spacer(modifier = Modifier.height(12.dp))
+
         Text(
             text = "0 / 500 words",
             color = MaterialTheme.colorScheme.primary,
@@ -271,12 +276,12 @@ fun HomeScreen() {
 @Composable
 fun BooksScreen() {
     HavenCard(title = "Your Books") {
-        Text(
-            text = "Your personal library will live here."
-        )
+        Text("Your personal library will live here.")
+
         Spacer(modifier = Modifier.height(8.dp))
+
         Text(
-            text = "Next, we'll add book creation, chapters, drafts and editing."
+            text = "We'll add book creation, chapters, drafts and editing."
         )
     }
 }
@@ -287,9 +292,11 @@ fun CalendarScreen() {
         Text(
             text = "Plan writing sessions, chapter deadlines and important dates."
         )
+
         Spacer(modifier = Modifier.height(8.dp))
+
         Text(
-            text = "We'll add a working calendar and event management next."
+            text = "We'll add calendar dates and event management next."
         )
     }
 }
@@ -300,7 +307,9 @@ fun IdeasScreen() {
         Text(
             text = "What secret is your main character afraid someone will discover?"
         )
+
         Spacer(modifier = Modifier.height(12.dp))
+
         Text(
             text = "Your idea notebook and writing prompts will go here."
         )
@@ -338,19 +347,14 @@ fun ProfileScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    androidx.compose.foundation.background(
-                        color = theme.primary,
-                        shape = RoundedCornerShape(50)
-                    ).let {
-                        Spacer(
-                            modifier = Modifier
-                                .size(14.dp)
-                                .background(
-                                    theme.primary,
-                                    RoundedCornerShape(50)
-                                )
-                        )
-                    }
+                    Spacer(
+                        modifier = Modifier
+                            .size(14.dp)
+                            .background(
+                                color = theme.primary,
+                                shape = RoundedCornerShape(50)
+                            )
+                    )
 
                     Text(theme.name)
                 }
