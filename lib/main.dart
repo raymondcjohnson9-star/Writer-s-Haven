@@ -1,3 +1,4 @@
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -10,7 +11,6 @@ void main() {
   runApp(const WritersHavenApp());
 }
 
-// Each available theme has a name and a color.
 class HavenTheme {
   final String name;
   final Color color;
@@ -29,7 +29,11 @@ const List<HavenTheme> havenThemes = [
   HavenTheme('Clean White', Color(0xFF777777), Brightness.light),
 ];
 
-// A chapter stores its title and written content.
+int countWords(String text) {
+  final trimmed = text.trim();
+  return trimmed.isEmpty ? 0 : trimmed.split(RegExp(r'\s+')).length;
+}
+
 class Chapter {
   final int id;
   String title;
@@ -41,24 +45,19 @@ class Chapter {
     this.content = '',
   });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'content': content,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'content': content,
+      };
 
-  factory Chapter.fromJson(Map<String, dynamic> json) {
-    return Chapter(
-      id: json['id'] as int,
-      title: json['title'] as String? ?? 'Untitled Chapter',
-      content: json['content'] as String? ?? '',
-    );
-  }
+  factory Chapter.fromJson(Map<String, dynamic> json) => Chapter(
+        id: json['id'] as int? ?? 0,
+        title: json['title'] as String? ?? 'Untitled Chapter',
+        content: json['content'] as String? ?? '',
+      );
 }
 
-// A book stores its details and all its chapters.
 class Book {
   final int id;
   String title;
@@ -72,49 +71,32 @@ class Book {
     List<Chapter>? chapters,
   }) : chapters = chapters ?? [];
 
-  int get totalWords {
-    return chapters.fold(
-      0,
-      (total, chapter) => total + countWords(chapter.content),
-    );
-  }
+  int get totalWords => chapters.fold(
+        0,
+        (total, chapter) => total + countWords(chapter.content),
+      );
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'title': title,
-      'description': description,
-      'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
-    };
-  }
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'title': title,
+        'description': description,
+        'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
+      };
 
   factory Book.fromJson(Map<String, dynamic> json) {
     final savedChapters = json['chapters'] as List<dynamic>? ?? [];
 
     return Book(
-      id: json['id'] as int,
+      id: json['id'] as int? ?? 0,
       title: json['title'] as String? ?? 'Untitled Book',
       description: json['description'] as String? ?? '',
       chapters: savedChapters
-          .map(
-            (chapter) => Chapter.fromJson(
-              Map<String, dynamic>.from(chapter as Map),
-            ),
-          )
+          .map((chapter) => Chapter.fromJson(
+                Map<String, dynamic>.from(chapter as Map),
+              ))
           .toList(),
     );
   }
-}
-
-// Counts words in a piece of text.
-int countWords(String text) {
-  final trimmed = text.trim();
-
-  if (trimmed.isEmpty) {
-    return 0;
-  }
-
-  return trimmed.split(RegExp(r'\s+')).length;
 }
 
 class WritersHavenApp extends StatefulWidget {
@@ -133,7 +115,6 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
   List<Book> books = [];
   bool isLoading = true;
   bool saveFailed = false;
-
   Timer? saveTimer;
 
   @override
@@ -142,7 +123,6 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     loadSavedData();
   }
 
-  // Loads saved books and settings when the app starts.
   Future<void> loadSavedData() async {
     try {
       final preferences = await SharedPreferences.getInstance();
@@ -151,29 +131,22 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
       if (savedText != null) {
         final data = jsonDecode(savedText) as Map<String, dynamic>;
 
-        final savedBooks = data['books'] as List<dynamic>? ?? [];
-
-        books = savedBooks
-            .map(
-              (book) => Book.fromJson(
-                Map<String, dynamic>.from(book as Map),
-              ),
-            )
+        books = (data['books'] as List<dynamic>? ?? [])
+            .map((item) => Book.fromJson(
+                  Map<String, dynamic>.from(item as Map),
+                ))
             .toList();
 
-        selectedTheme = (data['selectedTheme'] as int?) ?? 0;
-
-        nextBookId = (data['nextBookId'] as int?) ?? 1;
-        nextChapterId = (data['nextChapterId'] as int?) ?? 1;
+        selectedTheme = data['selectedTheme'] as int? ?? 0;
+        nextBookId = data['nextBookId'] as int? ?? 1;
+        nextChapterId = data['nextChapterId'] as int? ?? 1;
 
         if (selectedTheme < 0 || selectedTheme >= havenThemes.length) {
           selectedTheme = 0;
         }
 
         for (final book in books) {
-          if (book.id >= nextBookId) {
-            nextBookId = book.id + 1;
-          }
+          if (book.id >= nextBookId) nextBookId = book.id + 1;
 
           for (final chapter in book.chapters) {
             if (chapter.id >= nextChapterId) {
@@ -187,28 +160,18 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     }
 
     if (mounted) {
-      setState(() {
-        isLoading = false;
-      });
+      setState(() => isLoading = false);
     }
   }
 
-  // Waits briefly after a change before saving.
-  // This prevents a save operation for every single keystroke.
   void scheduleSave() {
     saveTimer?.cancel();
-
-    saveTimer = Timer(
-      const Duration(milliseconds: 500),
-      saveData,
-    );
+    saveTimer = Timer(const Duration(milliseconds: 500), saveData);
   }
 
-  // Saves books, chapters, and the selected theme on the phone.
   Future<void> saveData() async {
     try {
       final preferences = await SharedPreferences.getInstance();
-
       final data = {
         'books': books.map((book) => book.toJson()).toList(),
         'selectedTheme': selectedTheme,
@@ -221,60 +184,41 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         jsonEncode(data),
       );
 
-      if (mounted) {
-        setState(() {
-          saveFailed = !success;
-        });
-      }
+      if (mounted) setState(() => saveFailed = !success);
     } catch (error) {
       debugPrint('Could not save data: $error');
-
-      if (mounted) {
-        setState(() {
-          saveFailed = true;
-        });
-      }
+      if (mounted) setState(() => saveFailed = true);
     }
   }
 
   void createBook(String title, String description) {
     if (title.trim().isEmpty) return;
 
-    final firstChapter = Chapter(
-      id: nextChapterId++,
-      title: 'Chapter 1',
-    );
-
     setState(() {
-      books.add(
-        Book(
-          id: nextBookId++,
-          title: title.trim(),
-          description: description.trim(),
-          chapters: [firstChapter],
-        ),
-      );
+      books.add(Book(
+        id: nextBookId++,
+        title: title.trim(),
+        description: description.trim(),
+        chapters: [
+          Chapter(id: nextChapterId++, title: 'Chapter 1'),
+        ],
+      ));
     });
 
     scheduleSave();
   }
 
   void deleteBook(Book book) {
-    setState(() {
-      books.removeWhere((item) => item.id == book.id);
-    });
-
+    setState(() => books.removeWhere((item) => item.id == book.id));
     scheduleSave();
   }
 
   void addChapter(Book book) {
     setState(() {
-      book.chapters.add(
-        Chapter(
-          id: nextChapterId++,
-          title: 'Chapter ${book.chapters.length + 1}',
-        ),
-      );
+      book.chapters.add(Chapter(
+        id: nextChapterId++,
+        title: 'Chapter ${book.chapters.length + 1}',
+      ));
     });
 
     scheduleSave();
@@ -290,29 +234,18 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     scheduleSave();
   }
 
-  void updateChapterTitle(
-    Book book,
-    Chapter chapter,
-    String title,
-  ) {
+  void updateChapterTitle(Book book, Chapter chapter, String title) {
     chapter.title = title;
     scheduleSave();
   }
 
-  void updateChapterContent(
-    Book book,
-    Chapter chapter,
-    String content,
-  ) {
+  void updateChapterContent(Book book, Chapter chapter, String content) {
     chapter.content = content;
     scheduleSave();
   }
 
   void changeTheme(int index) {
-    setState(() {
-      selectedTheme = index;
-    });
-
+    setState(() => selectedTheme = index);
     scheduleSave();
   }
 
@@ -326,14 +259,10 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
   Widget build(BuildContext context) {
     final theme = havenThemes[selectedTheme];
 
-    final pages = [
+    final pages = <Widget>[
       HomeScreen(
         books: books,
-        onOpenBooks: () {
-          setState(() {
-            selectedTab = 1;
-          });
-        },
+        onOpenBooks: () => setState(() => selectedTab = 1),
       ),
       BooksScreen(
         books: books,
@@ -370,15 +299,11 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
           brightness: theme.brightness,
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-        ),
+        appBarTheme: const AppBarTheme(centerTitle: false),
       ),
       home: isLoading
           ? const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
+              body: Center(child: CircularProgressIndicator()),
             )
           : Scaffold(
               body: SafeArea(
@@ -390,9 +315,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
               bottomNavigationBar: NavigationBar(
                 selectedIndex: selectedTab,
                 onDestinationSelected: (index) {
-                  setState(() {
-                    selectedTab = index;
-                  });
+                  setState(() => selectedTab = index);
                 },
                 destinations: const [
                   NavigationDestination(
@@ -407,14 +330,17 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.calendar_month_outlined),
+                    selectedIcon: Icon(Icons.calendar_month),
                     label: 'Calendar',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.lightbulb_outline),
+                    selectedIcon: Icon(Icons.lightbulb),
                     label: 'Ideas',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person_outline),
+                    selectedIcon: Icon(Icons.person),
                     label: 'Profile',
                   ),
                 ],
@@ -442,9 +368,7 @@ class HomeScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Writers Haven'),
-      ),
+      appBar: AppBar(title: const Text('Writers Haven')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -490,9 +414,8 @@ class HomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const Text(
-                    'Create a book, organise its chapters, '
-                    'and keep writing. Your changes are '
-                    'automatically saved on this phone.',
+                    'Create books, organise chapters, and keep writing. '
+                    'Your changes are saved on this phone.',
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
@@ -629,12 +552,7 @@ class BooksScreen extends StatelessWidget {
           FilledButton(
             onPressed: () {
               if (titleController.text.trim().isEmpty) return;
-
-              onCreateBook(
-                titleController.text,
-                descriptionController.text,
-              );
-
+              onCreateBook(titleController.text, descriptionController.text);
               Navigator.pop(dialogContext);
             },
             child: const Text('Create'),
@@ -647,10 +565,7 @@ class BooksScreen extends StatelessWidget {
     descriptionController.dispose();
   }
 
-  Future<void> confirmDeleteBook(
-    BuildContext context,
-    Book book,
-  ) async {
+  Future<void> confirmDeleteBook(BuildContext context, Book book) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -672,9 +587,7 @@ class BooksScreen extends StatelessWidget {
       ),
     );
 
-    if (confirmed == true) {
-      onDeleteBook(book);
-    }
+    if (confirmed == true) onDeleteBook(book);
   }
 
   @override
@@ -734,6 +647,11 @@ class BooksScreen extends StatelessWidget {
                       '${book.chapters.length} chapters · '
                       '${book.totalWords} words',
                     ),
+                    trailing: IconButton(
+                      tooltip: 'Delete book',
+                      icon: const Icon(Icons.delete_outline),
+                      onPressed: () => confirmDeleteBook(context, book),
+                    ),
                     onTap: () {
                       Navigator.push(
                         context,
@@ -743,4 +661,25 @@ class BooksScreen extends StatelessWidget {
                             onAddChapter: () => onAddChapter(book),
                             onDeleteChapter: (chapter) =>
                                 onDeleteChapter(book, chapter),
-                            
+                            onUpdateChapterTitle: (chapter, title) =>
+                                onUpdateChapterTitle(book, chapter, title),
+                            onUpdateChapterContent: (chapter, content) =>
+                                onUpdateChapterContent(book, chapter, content),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+class BookWorkspace extends StatefulWidget {
+  final Book book;
+  final VoidCallback onAddChapter;
+  final void Function(Chapter) onDeleteChapter;
+  final void Function(Chapter, String) onUpdateChapterTitle;
+  final void 
