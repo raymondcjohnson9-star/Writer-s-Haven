@@ -11,6 +11,8 @@ void main() {
   runApp(const WritersHavenApp());
 }
 
+// -------------------- THEMES --------------------
+
 class HavenTheme {
   final String name;
   final Color color;
@@ -34,6 +36,8 @@ int countWords(String text) {
   return trimmed.isEmpty ? 0 : trimmed.split(RegExp(r'\s+')).length;
 }
 
+// -------------------- DATA MODELS --------------------
+
 class Chapter {
   final int id;
   String title;
@@ -51,11 +55,13 @@ class Chapter {
         'content': content,
       };
 
-  factory Chapter.fromJson(Map<String, dynamic> json) => Chapter(
-        id: json['id'] as int? ?? 0,
-        title: json['title'] as String? ?? 'Untitled Chapter',
-        content: json['content'] as String? ?? '',
-      );
+  factory Chapter.fromJson(Map<String, dynamic> json) {
+    return Chapter(
+      id: (json['id'] as num?)?.toInt() ?? 0,
+      title: json['title'] as String? ?? 'Untitled Chapter',
+      content: json['content'] as String? ?? '',
+    );
+  }
 }
 
 class Book {
@@ -71,7 +77,7 @@ class Book {
     List<Chapter>? chapters,
   }) : chapters = chapters ?? [];
 
-  int get totalWords => chapters.fold(
+  int get totalWords => chapters.fold<int>(
         0,
         (total, chapter) => total + countWords(chapter.content),
       );
@@ -87,17 +93,21 @@ class Book {
     final savedChapters = json['chapters'] as List<dynamic>? ?? [];
 
     return Book(
-      id: json['id'] as int? ?? 0,
+      id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? 'Untitled Book',
       description: json['description'] as String? ?? '',
       chapters: savedChapters
-          .map((chapter) => Chapter.fromJson(
-                Map<String, dynamic>.from(chapter as Map),
-              ))
+          .map(
+            (item) => Chapter.fromJson(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .toList(),
     );
   }
 }
+
+// -------------------- MAIN APP --------------------
 
 class WritersHavenApp extends StatefulWidget {
   const WritersHavenApp({super.key});
@@ -132,21 +142,27 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         final data = jsonDecode(savedText) as Map<String, dynamic>;
 
         books = (data['books'] as List<dynamic>? ?? [])
-            .map((item) => Book.fromJson(
-                  Map<String, dynamic>.from(item as Map),
-                ))
+            .map(
+              (item) => Book.fromJson(
+                Map<String, dynamic>.from(item as Map),
+              ),
+            )
             .toList();
 
-        selectedTheme = data['selectedTheme'] as int? ?? 0;
-        nextBookId = data['nextBookId'] as int? ?? 1;
-        nextChapterId = data['nextChapterId'] as int? ?? 1;
+        selectedTheme =
+            (data['selectedTheme'] as num?)?.toInt() ?? 0;
+        nextBookId = (data['nextBookId'] as num?)?.toInt() ?? 1;
+        nextChapterId =
+            (data['nextChapterId'] as num?)?.toInt() ?? 1;
 
         if (selectedTheme < 0 || selectedTheme >= havenThemes.length) {
           selectedTheme = 0;
         }
 
         for (final book in books) {
-          if (book.id >= nextBookId) nextBookId = book.id + 1;
+          if (book.id >= nextBookId) {
+            nextBookId = book.id + 1;
+          }
 
           for (final chapter in book.chapters) {
             if (chapter.id >= nextChapterId) {
@@ -166,12 +182,16 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   void scheduleSave() {
     saveTimer?.cancel();
-    saveTimer = Timer(const Duration(milliseconds: 500), saveData);
+    saveTimer = Timer(
+      const Duration(milliseconds: 500),
+      () => saveData(),
+    );
   }
 
   Future<void> saveData() async {
     try {
       final preferences = await SharedPreferences.getInstance();
+
       final data = {
         'books': books.map((book) => book.toJson()).toList(),
         'selectedTheme': selectedTheme,
@@ -184,10 +204,14 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         jsonEncode(data),
       );
 
-      if (mounted) setState(() => saveFailed = !success);
+      if (mounted) {
+        setState(() => saveFailed = !success);
+      }
     } catch (error) {
       debugPrint('Could not save data: $error');
-      if (mounted) setState(() => saveFailed = true);
+      if (mounted) {
+        setState(() => saveFailed = true);
+      }
     }
   }
 
@@ -195,32 +219,56 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     if (title.trim().isEmpty) return;
 
     setState(() {
-      books.add(Book(
-        id: nextBookId++,
-        title: title.trim(),
-        description: description.trim(),
-        chapters: [
-          Chapter(id: nextChapterId++, title: 'Chapter 1'),
-        ],
-      ));
+      books.add(
+        Book(
+          id: nextBookId++,
+          title: title.trim(),
+          description: description.trim(),
+          chapters: [
+            Chapter(
+              id: nextChapterId++,
+              title: 'Chapter 1',
+            ),
+          ],
+        ),
+      );
     });
 
     scheduleSave();
   }
 
   void deleteBook(Book book) {
-    setState(() => books.removeWhere((item) => item.id == book.id));
+    setState(() {
+      books.removeWhere((item) => item.id == book.id);
+    });
+    scheduleSave();
+  }
+
+  void updateBookTitle(Book book, String title) {
+    if (title.trim().isEmpty) return;
+
+    setState(() {
+      book.title = title.trim();
+    });
+    scheduleSave();
+  }
+
+  void updateBookDescription(Book book, String description) {
+    setState(() {
+      book.description = description.trim();
+    });
     scheduleSave();
   }
 
   void addChapter(Book book) {
     setState(() {
-      book.chapters.add(Chapter(
-        id: nextChapterId++,
-        title: 'Chapter ${book.chapters.length + 1}',
-      ));
+      book.chapters.add(
+        Chapter(
+          id: nextChapterId++,
+          title: 'Chapter ${book.chapters.length + 1}',
+        ),
+      );
     });
-
     scheduleSave();
   }
 
@@ -230,7 +278,6 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     setState(() {
       book.chapters.removeWhere((item) => item.id == chapter.id);
     });
-
     scheduleSave();
   }
 
@@ -239,7 +286,11 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     scheduleSave();
   }
 
-  void updateChapterContent(Book book, Chapter chapter, String content) {
+  void updateChapterContent(
+    Book book,
+    Chapter chapter,
+    String content,
+  ) {
     chapter.content = content;
     scheduleSave();
   }
@@ -268,6 +319,8 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         books: books,
         onCreateBook: createBook,
         onDeleteBook: deleteBook,
+        onUpdateBookTitle: updateBookTitle,
+        onUpdateBookDescription: updateBookDescription,
         onAddChapter: addChapter,
         onDeleteChapter: deleteChapter,
         onUpdateChapterTitle: updateChapterTitle,
@@ -350,6 +403,8 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
   }
 }
 
+// -------------------- HOME SCREEN --------------------
+
 class HomeScreen extends StatelessWidget {
   final List<Book> books;
   final VoidCallback onOpenBooks;
@@ -368,7 +423,9 @@ class HomeScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Writers Haven')),
+      appBar: AppBar(
+        title: const Text('Writers Haven'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -493,10 +550,14 @@ class _StatCard extends StatelessWidget {
   }
 }
 
+// -------------------- BOOKSHELF --------------------
+
 class BooksScreen extends StatelessWidget {
   final List<Book> books;
   final void Function(String, String) onCreateBook;
   final void Function(Book) onDeleteBook;
+  final void Function(Book, String) onUpdateBookTitle;
+  final void Function(Book, String) onUpdateBookDescription;
   final void Function(Book) onAddChapter;
   final void Function(Book, Chapter) onDeleteChapter;
   final void Function(Book, Chapter, String) onUpdateChapterTitle;
@@ -507,6 +568,8 @@ class BooksScreen extends StatelessWidget {
     required this.books,
     required this.onCreateBook,
     required this.onDeleteBook,
+    required this.onUpdateBookTitle,
+    required this.onUpdateBookDescription,
     required this.onAddChapter,
     required this.onDeleteChapter,
     required this.onUpdateChapterTitle,
@@ -552,7 +615,12 @@ class BooksScreen extends StatelessWidget {
           FilledButton(
             onPressed: () {
               if (titleController.text.trim().isEmpty) return;
-              onCreateBook(titleController.text, descriptionController.text);
+
+              onCreateBook(
+                titleController.text,
+                descriptionController.text,
+              );
+
               Navigator.pop(dialogContext);
             },
             child: const Text('Create'),
@@ -565,13 +633,16 @@ class BooksScreen extends StatelessWidget {
     descriptionController.dispose();
   }
 
-  Future<void> confirmDeleteBook(BuildContext context, Book book) async {
+  Future<void> confirmDeleteBook(
+    BuildContext context,
+    Book book,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Delete this book?'),
         content: Text(
-          '“${book.title}” and all its chapters will be deleted '
+          '"${book.title}" and all its chapters will be deleted '
           'from this phone.',
         ),
         actions: [
@@ -658,13 +729,21 @@ class BooksScreen extends StatelessWidget {
                         MaterialPageRoute<void>(
                           builder: (_) => BookWorkspace(
                             book: book,
+                            onUpdateBookTitle: (title) =>
+                                onUpdateBookTitle(book, title),
+                            onUpdateBookDescription: (description) =>
+                                onUpdateBookDescription(book, description),
                             onAddChapter: () => onAddChapter(book),
                             onDeleteChapter: (chapter) =>
                                 onDeleteChapter(book, chapter),
                             onUpdateChapterTitle: (chapter, title) =>
                                 onUpdateChapterTitle(book, chapter, title),
                             onUpdateChapterContent: (chapter, content) =>
-                                onUpdateChapterContent(book, chapter, content),
+                                onUpdateChapterContent(
+                                  book,
+                                  chapter,
+                                  content,
+                                ),
                           ),
                         ),
                       );
@@ -677,9 +756,471 @@ class BooksScreen extends StatelessWidget {
   }
 }
 
+// -------------------- BOOK WORKSPACE --------------------
+
 class BookWorkspace extends StatefulWidget {
   final Book book;
+  final ValueChanged<String> onUpdateBookTitle;
+  final ValueChanged<String> onUpdateBookDescription;
   final VoidCallback onAddChapter;
-  final void Function(Chapter) onDeleteChapter;
+  final ValueChanged<Chapter> onDeleteChapter;
   final void Function(Chapter, String) onUpdateChapterTitle;
-  final void 
+  final void Function(Chapter, String) onUpdateChapterContent;
+
+  const BookWorkspace({
+    super.key,
+    required this.book,
+    required this.onUpdateBookTitle,
+    required this.onUpdateBookDescription,
+    required this.onAddChapter,
+    required this.onDeleteChapter,
+    required this.onUpdateChapterTitle,
+    required this.onUpdateChapterContent,
+  });
+
+  @override
+  State<BookWorkspace> createState() => _BookWorkspaceState();
+}
+
+class _BookWorkspaceState extends State<BookWorkspace> {
+  int selectedChapterId = -1;
+  late final TextEditingController titleController;
+  late final TextEditingController descriptionController;
+  late final TextEditingController chapterTitleController;
+  late final TextEditingController contentController;
+
+  Chapter? get selectedChapter {
+    for (final chapter in widget.book.chapters) {
+      if (chapter.id == selectedChapterId) return chapter;
+    }
+    return widget.book.chapters.isEmpty ? null : widget.book.chapters.first;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    titleController = TextEditingController(text: widget.book.title);
+    descriptionController =
+        TextEditingController(text: widget.book.description);
+    chapterTitleController = TextEditingController();
+    contentController = TextEditingController();
+
+    if (widget.book.chapters.isNotEmpty) {
+      selectedChapterId = widget.book.chapters.first.id;
+      _loadChapter(widget.book.chapters.first);
+    }
+  }
+
+  void _loadChapter(Chapter chapter) {
+    selectedChapterId = chapter.id;
+    chapterTitleController.text = chapter.title;
+    contentController.text = chapter.content;
+  }
+
+  void _selectChapter(Chapter chapter) {
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _loadChapter(chapter);
+    });
+  }
+
+  void _addChapter() {
+    widget.onAddChapter();
+
+    if (widget.book.chapters.isNotEmpty) {
+      setState(() {
+        _loadChapter(widget.book.chapters.last);
+      });
+    }
+  }
+
+  Future<void> _deleteSelectedChapter() async {
+    final chapter = selectedChapter;
+    if (chapter == null) return;
+
+    if (widget.book.chapters.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A book must have at least one chapter.'),
+        ),
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete chapter?'),
+        content: Text('Delete "${chapter.title}" permanently?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    final oldIndex = widget.book.chapters.indexOf(chapter);
+    widget.onDeleteChapter(chapter);
+
+    final remaining = widget.book.chapters;
+    if (remaining.isNotEmpty) {
+      final newIndex = oldIndex >= remaining.length
+          ? remaining.length - 1
+          : oldIndex;
+
+      setState(() {
+        _loadChapter(remaining[newIndex]);
+      });
+    }
+  }
+
+  Future<void> _editBookDetails() async {
+    final title = TextEditingController(text: widget.book.title);
+    final description =
+        TextEditingController(text: widget.book.description);
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Book details'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                decoration: const InputDecoration(labelText: 'Book title'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: description,
+                maxLines: 3,
+                decoration:
+                    const InputDecoration(labelText: 'Description'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (title.text.trim().isEmpty) return;
+
+              widget.onUpdateBookTitle(title.text);
+              widget.onUpdateBookDescription(description.text);
+
+              titleController.text = title.text.trim();
+              descriptionController.text = description.text.trim();
+
+              Navigator.pop(dialogContext);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    title.dispose();
+    description.dispose();
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+    chapterTitleController.dispose();
+    contentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chapter = selectedChapter;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.book.title),
+        actions: [
+          IconButton(
+            tooltip: 'Edit book details',
+            onPressed: _editBookDetails,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+          IconButton(
+            tooltip: 'Add chapter',
+            onPressed: _addChapter,
+            icon: const Icon(Icons.add),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.book.description.isEmpty
+                      ? 'Your story workspace'
+                      : widget.book.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '${widget.book.chapters.length} chapters · '
+                  '${widget.book.totalWords} words',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          SizedBox(
+            height: 70,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 8,
+              ),
+              children: [
+                ...widget.book.chapters.map(
+                  (item) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(item.title),
+                      selected: item.id == (chapter?.id ?? -1),
+                      onSelected: (_) => _selectChapter(item),
+                    ),
+                  ),
+                ),
+                ActionChip(
+                  avatar: const Icon(Icons.add, size: 18),
+                  label: const Text('New chapter'),
+                  onPressed: _addChapter,
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          if (chapter == null)
+            const Expanded(
+              child: Center(child: Text('Create a chapter to begin.')),
+            )
+          else
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  TextField(
+                    controller: chapterTitleController,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      labelText: 'Chapter title',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (value) {
+                      widget.onUpdateChapterTitle(chapter, value);
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Text(
+                        '${countWords(contentController.text)} words',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        tooltip: 'Delete chapter',
+                        onPressed: _deleteSelectedChapter,
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                    ],
+                  ),
+                  TextField(
+                    controller: contentController,
+                    minLines: 12,
+                    maxLines: null,
+                    keyboardType: TextInputType.multiline,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: 'Start writing your story here...',
+                      border: OutlineInputBorder(),
+                      alignLabelWithHint: true,
+                    ),
+                    onChanged: (value) {
+                      widget.onUpdateChapterContent(chapter, value);
+                      setState(() {});
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Your changes are saved automatically on this phone.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// -------------------- SIMPLE SCREENS --------------------
+
+class SimpleScreen extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  const SimpleScreen({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 64),
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'This section is not fully implemented yet.',
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// -------------------- PROFILE AND SETTINGS --------------------
+
+class ProfileScreen extends StatelessWidget {
+  final int selectedTheme;
+  final ValueChanged<int> onThemeChanged;
+  final bool saveFailed;
+
+  const ProfileScreen({
+    super.key,
+    required this.selectedTheme,
+    required this.onThemeChanged,
+    required this.saveFailed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Profile & Settings')),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const CircleAvatar(
+            radius: 38,
+            child: Icon(Icons.person, size: 42),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Writer',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Make yourself at home. Your stories start here.',
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Appearance',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          const Text('Choose the colour theme for your writing space.'),
+          const SizedBox(height: 12),
+          ...List.generate(havenThemes.length, (index) {
+            final theme = havenThemes[index];
+
+            return Card(
+              child: RadioListTile<int>(
+                value: index,
+                groupValue: selectedTheme,
+                onChanged: (value) {
+                  if (value != null) onThemeChanged(value);
+                },
+                secondary: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: theme.color,
+                ),
+                title: Text(theme.name),
+              ),
+            );
+          }),
+          const SizedBox(height: 20),
+          Card(
+            child: ListTile(
+              leading: Icon(
+                saveFailed ? Icons.warning_amber : Icons.save_outlined,
+              ),
+              title: const Text('Writing storage'),
+              subtitle: Text(
+                saveFailed
+                    ? 'A save failed. Please check the app and try again.'
+                    : 'Your books and chapters are saved locally on this phone.',
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Writers Haven',
+            textAlign: TextAlign.center,
+          ),
+          const Text(
+            'A home for your stories.',
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}
