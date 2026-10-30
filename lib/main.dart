@@ -149,20 +149,16 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
             )
             .toList();
 
-        selectedTheme =
-            (data['selectedTheme'] as num?)?.toInt() ?? 0;
+        selectedTheme = (data['selectedTheme'] as num?)?.toInt() ?? 0;
         nextBookId = (data['nextBookId'] as num?)?.toInt() ?? 1;
-        nextChapterId =
-            (data['nextChapterId'] as num?)?.toInt() ?? 1;
+        nextChapterId = (data['nextChapterId'] as num?)?.toInt() ?? 1;
 
         if (selectedTheme < 0 || selectedTheme >= havenThemes.length) {
           selectedTheme = 0;
         }
 
         for (final book in books) {
-          if (book.id >= nextBookId) {
-            nextBookId = book.id + 1;
-          }
+          if (book.id >= nextBookId) nextBookId = book.id + 1;
 
           for (final chapter in book.chapters) {
             if (chapter.id >= nextChapterId) {
@@ -204,14 +200,10 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         jsonEncode(data),
       );
 
-      if (mounted) {
-        setState(() => saveFailed = !success);
-      }
+      if (mounted) setState(() => saveFailed = !success);
     } catch (error) {
       debugPrint('Could not save data: $error');
-      if (mounted) {
-        setState(() => saveFailed = true);
-      }
+      if (mounted) setState(() => saveFailed = true);
     }
   }
 
@@ -246,17 +238,12 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   void updateBookTitle(Book book, String title) {
     if (title.trim().isEmpty) return;
-
-    setState(() {
-      book.title = title.trim();
-    });
+    setState(() => book.title = title.trim());
     scheduleSave();
   }
 
   void updateBookDescription(Book book, String description) {
-    setState(() {
-      book.description = description.trim();
-    });
+    setState(() => book.description = description.trim());
     scheduleSave();
   }
 
@@ -274,7 +261,6 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   void deleteChapter(Book book, Chapter chapter) {
     if (book.chapters.length <= 1) return;
-
     setState(() {
       book.chapters.removeWhere((item) => item.id == chapter.id);
     });
@@ -286,11 +272,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     scheduleSave();
   }
 
-  void updateChapterContent(
-    Book book,
-    Chapter chapter,
-    String content,
-  ) {
+  void updateChapterContent(Book book, Chapter chapter, String content) {
     chapter.content = content;
     scheduleSave();
   }
@@ -423,9 +405,7 @@ class HomeScreen extends StatelessWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Writers Haven'),
-      ),
+      appBar: AppBar(title: const Text('Writers Haven')),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -577,66 +557,15 @@ class BooksScreen extends StatelessWidget {
   });
 
   Future<void> showCreateBookDialog(BuildContext context) async {
-    final titleController = TextEditingController();
-    final descriptionController = TextEditingController();
-
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Create a book'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  labelText: 'Book title',
-                  hintText: 'Enter your story title',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descriptionController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (titleController.text.trim().isEmpty) return;
-
-              onCreateBook(
-                titleController.text,
-                descriptionController.text,
-              );
-
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('Create'),
-          ),
-        ],
+      builder: (dialogContext) => _CreateBookDialog(
+        onCreateBook: onCreateBook,
       ),
     );
-
-    titleController.dispose();
-    descriptionController.dispose();
   }
 
-  Future<void> confirmDeleteBook(
-    BuildContext context,
-    Book book,
-  ) async {
+  Future<void> confirmDeleteBook(BuildContext context, Book book) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -756,6 +685,96 @@ class BooksScreen extends StatelessWidget {
   }
 }
 
+// -------------------- CREATE BOOK DIALOG --------------------
+
+class _CreateBookDialog extends StatefulWidget {
+  final void Function(String, String) onCreateBook;
+
+  const _CreateBookDialog({required this.onCreateBook});
+
+  @override
+  State<_CreateBookDialog> createState() => _CreateBookDialogState();
+}
+
+class _CreateBookDialogState extends State<_CreateBookDialog> {
+  late final TextEditingController titleController;
+  late final TextEditingController descriptionController;
+
+  @override
+  void initState() {
+    super.initState();
+    titleController = TextEditingController();
+    descriptionController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Create a book'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Book title',
+                hintText: 'Enter your story title',
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descriptionController,
+              maxLines: 3,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Description (optional)',
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final title = titleController.text.trim();
+
+            if (title.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please enter a book title.'),
+                ),
+              );
+              return;
+            }
+
+            widget.onCreateBook(
+              title,
+              descriptionController.text.trim(),
+            );
+
+            Navigator.pop(context);
+          },
+          child: const Text('Create'),
+        ),
+      ],
+    );
+  }
+}
+
 // -------------------- BOOK WORKSPACE --------------------
 
 class BookWorkspace extends StatefulWidget {
@@ -784,6 +803,7 @@ class BookWorkspace extends StatefulWidget {
 
 class _BookWorkspaceState extends State<BookWorkspace> {
   int selectedChapterId = -1;
+
   late final TextEditingController titleController;
   late final TextEditingController descriptionController;
   late final TextEditingController chapterTitleController;
@@ -820,19 +840,14 @@ class _BookWorkspaceState extends State<BookWorkspace> {
 
   void _selectChapter(Chapter chapter) {
     FocusScope.of(context).unfocus();
-
-    setState(() {
-      _loadChapter(chapter);
-    });
+    setState(() => _loadChapter(chapter));
   }
 
   void _addChapter() {
     widget.onAddChapter();
 
     if (widget.book.chapters.isNotEmpty) {
-      setState(() {
-        _loadChapter(widget.book.chapters.last);
-      });
+      setState(() => _loadChapter(widget.book.chapters.last));
     }
   }
 
@@ -874,68 +889,31 @@ class _BookWorkspaceState extends State<BookWorkspace> {
 
     final remaining = widget.book.chapters;
     if (remaining.isNotEmpty) {
-      final newIndex = oldIndex >= remaining.length
-          ? remaining.length - 1
-          : oldIndex;
+      final newIndex =
+          oldIndex >= remaining.length ? remaining.length - 1 : oldIndex;
 
-      setState(() {
-        _loadChapter(remaining[newIndex]);
-      });
+      setState(() => _loadChapter(remaining[newIndex]));
     }
   }
 
   Future<void> _editBookDetails() async {
-    final title = TextEditingController(text: widget.book.title);
-    final description =
-        TextEditingController(text: widget.book.description);
-
-    await showDialog<void>(
+    final result = await showDialog<_BookDetailsResult>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Book details'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: title,
-                decoration: const InputDecoration(labelText: 'Book title'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: description,
-                maxLines: 3,
-                decoration:
-                    const InputDecoration(labelText: 'Description'),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (title.text.trim().isEmpty) return;
-
-              widget.onUpdateBookTitle(title.text);
-              widget.onUpdateBookDescription(description.text);
-
-              titleController.text = title.text.trim();
-              descriptionController.text = description.text.trim();
-
-              Navigator.pop(dialogContext);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      builder: (dialogContext) => _EditBookDialog(
+        initialTitle: widget.book.title,
+        initialDescription: widget.book.description,
       ),
     );
 
-    title.dispose();
-    description.dispose();
+    if (result == null || !mounted) return;
+
+    widget.onUpdateBookTitle(result.title);
+    widget.onUpdateBookDescription(result.description);
+
+    titleController.text = result.title;
+    descriptionController.text = result.description;
+
+    setState(() {});
   }
 
   @override
@@ -1086,6 +1064,102 @@ class _BookWorkspaceState extends State<BookWorkspace> {
   }
 }
 
+// -------------------- EDIT BOOK DIALOG --------------------
+
+class _BookDetailsResult {
+  final String title;
+  final String description;
+
+  const _BookDetailsResult(this.title, this.description);
+}
+
+class _EditBookDialog extends StatefulWidget {
+  final String initialTitle;
+  final String initialDescription;
+
+  const _EditBookDialog({
+    required this.initialTitle,
+    required this.initialDescription,
+  });
+
+  @override
+  State<_EditBookDialog> createState() => _EditBookDialogState();
+}
+
+class _EditBookDialogState extends State<_EditBookDialog> {
+  late final TextEditingController titleController;
+  late final TextEditingController descriptionController;
+
+  @override
+  void initState() {
+    super.initState();
+    titleController = TextEditingController(text: widget.initialTitle);
+    descriptionController =
+        TextEditingController(text: widget.initialDescription);
+  }
+
+  @override
+  void dispose() {
+    titleController.dispose();
+    descriptionController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Book details'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleController,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(labelText: 'Book title'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: descriptionController,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: 'Description'),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final title = titleController.text.trim();
+
+            if (title.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Please enter a book title.'),
+                ),
+              );
+              return;
+            }
+
+            Navigator.pop(
+              context,
+              _BookDetailsResult(
+                title,
+                descriptionController.text.trim(),
+              ),
+            );
+          },
+          child: const Text('Save'),
+        ),
+      ],
+    );
+  }
+}
+
 // -------------------- SIMPLE SCREENS --------------------
 
 class SimpleScreen extends StatelessWidget {
@@ -1117,10 +1191,7 @@ class SimpleScreen extends StatelessWidget {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-              ),
+              Text(subtitle, textAlign: TextAlign.center),
               const SizedBox(height: 12),
               const Text(
                 'This section is not fully implemented yet.',
@@ -1211,10 +1282,7 @@ class ProfileScreen extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Writers Haven',
-            textAlign: TextAlign.center,
-          ),
+          const Text('Writers Haven', textAlign: TextAlign.center),
           const Text(
             'A home for your stories.',
             textAlign: TextAlign.center,
