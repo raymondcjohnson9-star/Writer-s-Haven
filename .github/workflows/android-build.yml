@@ -37,6 +37,9 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --project-name writers_haven .
 
+      - name: Configure Android notifications
+        run: python3 scripts/configure_android_notifications.py
+
       - name: Install dependencies
         run: flutter pub get
 
