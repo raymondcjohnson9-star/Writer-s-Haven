@@ -52,15 +52,20 @@ if kotlin_gradle.exists():
         if count == 0:
             raise SystemExit("Could not find compileOptions block in build.gradle.kts")
 
+    dependency = '    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
     if "coreLibraryDesugaring(" not in gradle_text:
-        gradle_text, count = re.subn(
-            r"(dependencies\s*\{)",
-            r'\1\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")',
-            gradle_text,
-            count=1,
-        )
-        if count == 0:
-            raise SystemExit("Could not find dependencies block in build.gradle.kts")
+        if re.search(r"dependencies\s*\{", gradle_text):
+            gradle_text, count = re.subn(
+                r"(dependencies\s*\{)",
+                r"\1\n" + dependency,
+                gradle_text,
+                count=1,
+            )
+            if count == 0:
+                raise SystemExit("Could not add desugaring dependency to build.gradle.kts")
+        else:
+            # Recent Flutter templates may omit a dependencies block entirely.
+            gradle_text = gradle_text.rstrip() + "\n\ndependencies {\n" + dependency + "\n}\n"
 
 elif groovy_gradle.exists():
     gradle_path = groovy_gradle
@@ -76,15 +81,19 @@ elif groovy_gradle.exists():
         if count == 0:
             raise SystemExit("Could not find compileOptions block in build.gradle")
 
+    dependency = "    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
     if "coreLibraryDesugaring " not in gradle_text:
-        gradle_text, count = re.subn(
-            r"(dependencies\s*\{)",
-            r"\1\n    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'",
-            gradle_text,
-            count=1,
-        )
-        if count == 0:
-            raise SystemExit("Could not find dependencies block in build.gradle")
+        if re.search(r"dependencies\s*\{", gradle_text):
+            gradle_text, count = re.subn(
+                r"(dependencies\s*\{)",
+                r"\1\n" + dependency,
+                gradle_text,
+                count=1,
+            )
+            if count == 0:
+                raise SystemExit("Could not add desugaring dependency to build.gradle")
+        else:
+            gradle_text = gradle_text.rstrip() + "\n\ndependencies {\n" + dependency + "\n}\n"
 else:
     raise SystemExit("Could not find Android app Gradle build file")
 
