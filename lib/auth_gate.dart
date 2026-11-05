@@ -14,6 +14,7 @@ class AuthGate extends StatelessWidget {
       builder: (context, snapshot) {
         final session = snapshot.data?.session ?? client.auth.currentSession;
         if (session == null) {
+          // AuthScreen owns a Scaffold, so provide MaterialApp and Directionality here.
           return const MaterialApp(
             debugShowCheckedModeBanner: false,
             home: AuthScreen(),
