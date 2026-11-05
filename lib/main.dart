@@ -1299,10 +1299,18 @@ class ProfileScreen extends StatelessWidget {
               title: const Text('Writing storage'),
               subtitle: Text(
                 saveFailed
-                    ? 'A save failed. Please check the app and try again.'
-                    : 'Your books and chapters are saved locally on this phone.',
+                    ? 'Cloud sync needs attention. Check your connection and try again.'
+                    : 'Your books are saved to your account and synced across devices.',
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          FilledButton.tonalIcon(
+            onPressed: () async {
+              await Supabase.instance.client.auth.signOut();
+            },
+            icon: const Icon(Icons.logout),
+            label: const Text('Sign out'),
           ),
           const SizedBox(height: 12),
           const Text('Writers Haven', textAlign: TextAlign.center),
