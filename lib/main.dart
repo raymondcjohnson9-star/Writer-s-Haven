@@ -4,11 +4,24 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String storageKey = 'writers_haven_saved_data';
+import 'auth_gate.dart';
 
-void main() {
-  runApp(const WritersHavenApp());
+const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
+const String supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+
+String get storageKey =>
+    'writers_haven_saved_data_${Supabase.instance.client.auth.currentUser!.id}';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (supabaseUrl.isEmpty || supabasePublishableKey.isEmpty) {
+    runApp(const SupabaseSetupRequiredApp());
+    return;
+  }
+  await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
+  runApp(const AuthGate());
 }
 
 // -------------------- THEMES --------------------
