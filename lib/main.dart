@@ -146,76 +146,86 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     loadSavedData();
   }
 
-  Future<void> loadSavedData() async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      final savedText = preferences.getString(storageKey);
-
-      if (savedText != null) {
-        final data = jsonDecode(savedText) as Map<String, dynamic>;
-
-        books = (data['books'] as List<dynamic>? ?? [])
-            .map(
-              (item) => Book.fromJson(
-                Map<String, dynamic>.from(item as Map),
-              ),
-            )
-            .toList();
-
-        selectedTheme = (data['selectedTheme'] as num?)?.toInt() ?? 0;
-        nextBookId = (data['nextBookId'] as num?)?.toInt() ?? 1;
-        nextChapterId = (data['nextChapterId'] as num?)?.toInt() ?? 1;
-
-        if (selectedTheme < 0 || selectedTheme >= havenThemes.length) {
-          selectedTheme = 0;
-        }
-
-        for (final book in books) {
-          if (book.id >= nextBookId) nextBookId = book.id + 1;
-
-          for (final chapter in book.chapters) {
-            if (chapter.id >= nextChapterId) {
-              nextChapterId = chapter.id + 1;
-            }
-          }
-        }
+  void _applySavedData(Map<String, dynamic> data) {
+    books = (data['books'] as List<dynamic>? ?? [])
+        .map((item) => Book.fromJson(Map<String, dynamic>.from(item as Map)))
+        .toList();
+    selectedTheme = (data['selectedTheme'] as num?)?.toInt() ?? 0;
+    nextBookId = (data['nextBookId'] as num?)?.toInt() ?? 1;
+    nextChapterId = (data['nextChapterId'] as num?)?.toInt() ?? 1;
+    if (selectedTheme < 0 || selectedTheme >= havenThemes.length) selectedTheme = 0;
+    for (final book in books) {
+      if (book.id >= nextBookId) nextBookId = book.id + 1;
+      for (final chapter in book.chapters) {
+        if (chapter.id >= nextChapterId) nextChapterId = chapter.id + 1;
       }
-    } catch (error) {
-      debugPrint('Could not load saved data: $error');
-    }
-
-    if (mounted) {
-      setState(() => isLoading = false);
     }
   }
 
-  void scheduleSave() {
-    saveTimer?.cancel();
-    saveTimer = Timer(
-      const Duration(milliseconds: 500),
-      () => saveData(),
-    );
-  }
-
-  Future<void> saveData() async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-
-      final data = {
+  Map<String, dynamic> _workspaceData() => {
         'books': books.map((book) => book.toJson()).toList(),
         'selectedTheme': selectedTheme,
         'nextBookId': nextBookId,
         'nextChapterId': nextChapterId,
       };
 
-      final success = await preferences.setString(
-        storageKey,
-        jsonEncode(data),
-      );
+  Future<void> loadSavedData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw Exception('No signed-in user');
+      final preferences = await SharedPreferences.getInstance();
+      final localText = preferences.getString(storageKey);
+      final remoteRow = await Supabase.instance.client
+          .from('writer_workspaces')
+          .select('data')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (mounted) setState(() => saveFailed = !success);
+      if (remoteRow != null && remoteRow['data'] is Map) {
+        _applySavedData(Map<String, dynamic>.from(remoteRow['data'] as Map));
+      } else if (localText != null) {
+        final localData = jsonDecode(localText) as Map<String, dynamic>;
+        _applySavedData(localData);
+        await Supabase.instance.client.from('writer_workspaces').upsert({
+          'user_id': user.id,
+          'data': localData,
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      }
     } catch (error) {
-      debugPrint('Could not save data: $error');
+      debugPrint('Could not load cloud workspace: $error');
+      try {
+        final preferences = await SharedPreferences.getInstance();
+        final localText = preferences.getString(storageKey);
+        if (localText != null) _applySavedData(jsonDecode(localText) as Map<String, dynamic>);
+        if (mounted) setState(() => saveFailed = true);
+      } catch (localError) {
+        debugPrint('Could not load local workspace: $localError');
+      }
+    }
+    if (mounted) setState(() => isLoading = false);
+  }
+
+  void scheduleSave() {
+    saveTimer?.cancel();
+    saveTimer = Timer(const Duration(milliseconds: 700), () => saveData());
+  }
+
+  Future<void> saveData() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) throw Exception('No signed-in user');
+      final data = _workspaceData();
+      final preferences = await SharedPreferences.getInstance();
+      final localSuccess = await preferences.setString(storageKey, jsonEncode(data));
+      await Supabase.instance.client.from('writer_workspaces').upsert({
+        'user_id': user.id,
+        'data': data,
+        'updated_at': DateTime.now().toIso8601String(),
+      });
+      if (mounted) setState(() => saveFailed = !localSuccess);
+    } catch (error) {
+      debugPrint('Could not save workspace: $error');
       if (mounted) setState(() => saveFailed = true);
     }
   }
