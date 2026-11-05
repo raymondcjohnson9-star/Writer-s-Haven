@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth_gate.dart';
+import 'reminder_center_screen.dart';
 
 const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const String supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -35,7 +36,7 @@ class HavenTheme {
 }
 
 const List<HavenTheme> havenThemes = [
-  HavenTheme('Royal Purple', Color(0xFF7045A5), Brightness.light),
+  HavenTheme('Ink & Gold', Color(0xFF243B50), Brightness.light),
   HavenTheme('Emerald Garden', Color(0xFF16866A), Brightness.light),
   HavenTheme('Midnight Blue', Color(0xFF243B64), Brightness.light),
   HavenTheme('Rose Blush', Color(0xFFCE718D), Brightness.light),
@@ -331,11 +332,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onUpdateChapterTitle: updateChapterTitle,
         onUpdateChapterContent: updateChapterContent,
       ),
-      const SimpleScreen(
-        title: 'Calendar',
-        subtitle: 'Your writing schedule will live here.',
-        icon: Icons.calendar_month,
-      ),
+      ReminderCenterScreen(books: books),
       const SimpleScreen(
         title: 'Ideas',
         subtitle: 'Keep your story ideas organised.',
@@ -387,9 +384,9 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                     label: 'My Books',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.calendar_month_outlined),
-                    selectedIcon: Icon(Icons.calendar_month),
-                    label: 'Calendar',
+                    icon: Icon(Icons.notifications_none),
+                    selectedIcon: Icon(Icons.notifications_active),
+                    label: 'Reminders',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.lightbulb_outline),
@@ -413,107 +410,91 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 class HomeScreen extends StatelessWidget {
   final List<Book> books;
   final VoidCallback onOpenBooks;
-
-  const HomeScreen({
-    super.key,
-    required this.books,
-    required this.onOpenBooks,
-  });
+  const HomeScreen({super.key, required this.books, required this.onOpenBooks});
 
   @override
   Widget build(BuildContext context) {
-    final totalWords = books.fold<int>(
-      0,
-      (total, book) => total + book.totalWords,
-    );
-
+    final totalWords = books.fold<int>(0, (sum, book) => sum + book.totalWords);
+    final recent = books.reversed.take(3).toList();
+    final accent = Theme.of(context).colorScheme.primary;
     return Scaffold(
-      appBar: AppBar(title: const Text('Writers Haven')),
+      appBar: AppBar(
+        title: const Text('Writer’s Haven', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [IconButton(onPressed: onOpenBooks, icon: const Icon(Icons.library_books_outlined), tooltip: 'My library')],
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 28),
         children: [
-          Text(
-            'Welcome back, writer.',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          const Text('Your stories deserve a place to grow.'),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'My Books',
-                  value: '${books.length}',
-                  icon: Icons.menu_book,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Words Written',
-                  value: '$totalWords',
-                  icon: Icons.edit_note,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Your writing space',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Create books, organise chapters, and keep writing. '
-                    'Your changes are saved on this phone.',
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: onOpenBooks,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Open My Books'),
-                  ),
-                ],
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(26),
+              gradient: LinearGradient(
+                begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [accent, Color.lerp(accent, Colors.black, 0.3)!],
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Recent books',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          if (books.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.auto_stories),
-                title: Text('No books yet'),
-                subtitle: Text('Create your first story in My Books.'),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Text('YOUR CREATIVE SPACE', style: TextStyle(color: Colors.white70, fontSize: 11, letterSpacing: 1.8, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 12),
+              const Text('Every great story\nbegins with a page.', style: TextStyle(color: Colors.white, fontSize: 27, height: 1.12, fontWeight: FontWeight.w800)),
+              const SizedBox(height: 10),
+              const Text('Pick up where you left off or start something new.', style: TextStyle(color: Colors.white70)),
+              const SizedBox(height: 18),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: const Color(0xFFF1D58A), foregroundColor: const Color(0xFF243B50)),
+                onPressed: onOpenBooks,
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [Icon(Icons.edit_note), SizedBox(width: 8), Text('Open my library')]),
               ),
-            )
+            ]),
+          ),
+          const SizedBox(height: 20),
+          Row(children: [
+            Expanded(child: _StatCard(label: 'Books', value: '${books.length}', icon: Icons.menu_book)),
+            const SizedBox(width: 12),
+            Expanded(child: _StatCard(label: 'Words written', value: '$totalWords', icon: Icons.edit_note)),
+          ]),
+          const SizedBox(height: 24),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+            Text('Continue your story', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            TextButton(onPressed: onOpenBooks, child: const Text('See all')),
+          ]),
+          if (recent.isEmpty)
+            Card(child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(children: [
+                Icon(Icons.auto_stories_outlined, size: 38, color: accent),
+                const SizedBox(height: 10),
+                const Text('Your bookshelf is waiting', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 5),
+                const Text('Create your first book and give your ideas a home.', textAlign: TextAlign.center),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(onPressed: onOpenBooks, icon: const Icon(Icons.add), label: const Text('Create a book')),
+              ]),
+            ))
           else
-            ...books.reversed.take(3).map(
-                  (book) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.menu_book),
-                      title: Text(book.title),
-                      subtitle: Text(
-                        '${book.chapters.length} chapters · '
-                        '${book.totalWords} words',
-                      ),
-                    ),
-                  ),
+            ...recent.map((book) => Card(
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                leading: Container(
+                  width: 48, height: 58,
+                  decoration: BoxDecoration(color: accent.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                  child: Icon(Icons.menu_book_rounded, color: accent),
                 ),
+                title: Text(book.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w700)),
+                subtitle: Text('${book.chapters.length} chapters • ${book.totalWords} words'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onOpenBooks,
+              ),
+            )),
+          const SizedBox(height: 16),
+          Card(child: ListTile(
+            leading: CircleAvatar(backgroundColor: accent.withOpacity(0.12), child: Icon(Icons.notifications_active_outlined, color: accent)),
+            title: const Text('Build a writing habit', style: TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text('Set a daily reminder and weekly draft check-in.'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: onOpenBooks,
+          )),
         ],
       ),
     );
