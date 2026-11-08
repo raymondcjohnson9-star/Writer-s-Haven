@@ -328,6 +328,8 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
       HomeScreen(
         books: books,
         onOpenBooks: () => setState(() => selectedTab = 1),
+        onOpenCalendar: () => setState(() => selectedTab = 2),
+        onOpenLibrary: () => setState(() => selectedTab = 3),
       ),
       BooksScreen(
         books: books,
@@ -341,11 +343,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onUpdateChapterContent: updateChapterContent,
       ),
       const CalendarScreen(userId: 'guest'),
-      const SimpleScreen(
-        title: 'Ideas',
-        subtitle: 'Keep your story ideas organised.',
-        icon: Icons.lightbulb_outline,
-      ),
+      const LibraryScreen(),
       ProfileScreen(
         selectedTheme: selectedTheme,
         onThemeChanged: changeTheme,
@@ -447,7 +445,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                   NavigationDestination(
                     icon: Icon(Icons.menu_book_outlined),
                     selectedIcon: Icon(Icons.menu_book),
-                    label: 'My Books',
+                    label: 'Stories',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.calendar_month_outlined),
@@ -455,9 +453,9 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                     label: 'Calendar',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.lightbulb_outline),
-                    selectedIcon: Icon(Icons.lightbulb),
-                    label: 'Ideas',
+                    icon: Icon(Icons.local_library_outlined),
+                    selectedIcon: Icon(Icons.local_library),
+                    label: 'Library',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person_outline),
@@ -474,147 +472,39 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 // -------------------- HOME SCREEN --------------------
 
 class HomeScreen extends StatelessWidget {
-  final List<Book> books;
-  final VoidCallback onOpenBooks;
-
-  const HomeScreen({
-    super.key,
-    required this.books,
-    required this.onOpenBooks,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final totalWords = books.fold<int>(
-      0,
-      (total, book) => total + book.totalWords,
-    );
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Writers Haven')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            'Welcome back, writer.',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          const Text('Your stories deserve a place to grow.'),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'My Books',
-                  value: '${books.length}',
-                  icon: Icons.menu_book,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Words Written',
-                  value: '$totalWords',
-                  icon: Icons.edit_note,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Your writing space',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Create books, organise chapters, and keep writing. '
-                    'Your changes are saved on this phone.',
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: onOpenBooks,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Open My Books'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Recent books',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          if (books.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.auto_stories),
-                title: Text('No books yet'),
-                subtitle: Text('Create your first story in My Books.'),
-              ),
-            )
-          else
-            ...books.reversed.take(3).map(
-                  (book) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.menu_book),
-                      title: Text(book.title),
-                      subtitle: Text(
-                        '${book.chapters.length} chapters · '
-                        '${book.totalWords} words',
-                      ),
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
+  final List<Book> books; final VoidCallback onOpenBooks; final VoidCallback onOpenCalendar; final VoidCallback onOpenLibrary;
+  const HomeScreen({super.key, required this.books, required this.onOpenBooks, required this.onOpenCalendar, required this.onOpenLibrary});
+  @override Widget build(BuildContext context) {
+    final totalWords = books.fold<int>(0, (total, book) => total + book.totalWords);
+    final recent = books.reversed.take(3).toList();
+    return Scaffold(body: ListView(padding: const EdgeInsets.fromLTRB(18,18,18,28), children: [
+      Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const Text('Good morning,', style: TextStyle(color: Colors.white70)),
+        Text('Writer 👑', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+        const Text('Small steps. Big stories.', style: TextStyle(color: Color(0xFFADB8D2))),
+      ])), IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none_rounded)), IconButton(onPressed: onOpenLibrary, icon: const Icon(Icons.settings_outlined))]),
+      const SizedBox(height:20),
+      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: const LinearGradient(colors:[Color(0xFF25205C),Color(0xFF172B50)]), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF51468F))), child: Row(children:[const CircleAvatar(radius:25,backgroundColor:Color(0xFF7560FF),child:Icon(Icons.auto_stories,color:Colors.white)),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Your writing progress',style:TextStyle(color:Color(0xFFC9C0FF))),const SizedBox(height:4),Text('$totalWords words written',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),const Icon(Icons.trending_up,color:Color(0xFFB9A6FF),size:28)])),
+      const SizedBox(height:16),
+      GridView.count(crossAxisCount:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:1.22,children:[
+        _HomeAction(icon:Icons.menu_book_rounded,title:'My Stories',subtitle:'Manage your stories',onTap:onOpenBooks),
+        _HomeAction(icon:Icons.calendar_month_rounded,title:'Calendar',subtitle:'Plan your writing',onTap:onOpenCalendar),
+        _HomeAction(icon:Icons.edit_note_rounded,title:'Drafts',subtitle:'Continue where you left off',onTap:onOpenBooks),
+        _HomeAction(icon:Icons.local_library_rounded,title:'Library',subtitle:'Writing resources',onTap:onOpenLibrary),
+      ]),
+      const SizedBox(height:24), Row(children:[Expanded(child:Text('Recent Stories',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),TextButton(onPressed:onOpenBooks,child:const Text('See all  ›'))]),
+      if(recent.isEmpty) const Card(child:ListTile(leading:Icon(Icons.auto_stories),title:Text('Your first story starts here'),subtitle:Text('Tap My Stories to create a book.'))) else ...recent.map((book)=>_StoryTile(book:book,onTap:onOpenBooks)),
+    ])));
   }
 }
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 28),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            Text(label),
-          ],
-        ),
-      ),
-    );
-  }
+class _HomeAction extends StatelessWidget { final IconData icon; final String title; final String subtitle; final VoidCallback onTap; const _HomeAction({required this.icon,required this.title,required this.subtitle,required this.onTap});
+  @override Widget build(BuildContext context)=>Material(color:const Color(0xFF101B32),borderRadius:BorderRadius.circular(18),child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(18),child:Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),border:Border.all(color:const Color(0xFF293B64))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:29,color:const Color(0xFFB49AFF)),const Spacer(),Text(title,style:const TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:3),Text(subtitle,style:const TextStyle(fontSize:11,color:Color(0xFF9AA7C4)))]))));
 }
+class _StoryTile extends StatelessWidget { final Book book; final VoidCallback onTap; const _StoryTile({required this.book,required this.onTap});
+  @override Widget build(BuildContext context)=>Card(child:ListTile(onTap:onTap,contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:7),leading:Container(width:54,height:64,decoration:BoxDecoration(borderRadius:BorderRadius.circular(10),gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,colors:[Color(0xFF526A9F),Color(0xFF171D43),Color(0xFF9A6C9C)])),child:const Icon(Icons.menu_book_rounded,color:Colors.white)),title:Text(book.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('${book.chapters.length} chapters · ${book.totalWords} words'),trailing:const Icon(Icons.more_vert,color:Color(0xFF9AA7C4))));
+}
+
+// -------------------- BOOKSHELF --------------------
 
 // -------------------- BOOKSHELF --------------------
 
@@ -1248,48 +1138,14 @@ class _EditBookDialogState extends State<_EditBookDialog> {
 
 // -------------------- SIMPLE SCREENS --------------------
 
-class SimpleScreen extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  const SimpleScreen({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 64),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(subtitle, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              const Text(
-                'This section is not fully implemented yet.',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+class LibraryScreen extends StatelessWidget { const LibraryScreen({super.key});
+  @override Widget build(BuildContext context) {
+    final resources=[(Icons.tips_and_updates,'Writing Tips','Improve your writing skills','Build a daily writing habit. Start scenes with a clear moment, keep dialogue natural, and revise after the first draft.'),(Icons.person_search,'Character Builder','Create memorable characters','Give every character a goal, a strength, a weakness, and something they are afraid to lose.'),(Icons.auto_awesome,'Plot Ideas','Never run out of ideas','A stranger leaves a letter at the wrong door. The person who receives it discovers a secret that changes their town.'),(Icons.public,'World Building','Build rich story worlds','Decide how the world works: its places, history, rules, culture, and what happens when someone breaks those rules.'),(Icons.edit_note,'Writing Prompts','Get inspired','Write about a promise made years ago that must finally be kept today.'),(Icons.favorite_border,'Favourites','Saved for later','Your favourite writing resources will appear here as you save them.')];
+    return Scaffold(appBar:AppBar(title:const Text('Library')),body:ListView(padding:const EdgeInsets.all(16),children:[Text('Grow your craft',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),const SizedBox(height:5),const Text('Tools and inspiration for your next great story.',style:TextStyle(color:Color(0xFFADB8D2))),const SizedBox(height:18),...resources.map((item)=>Card(child:ExpansionTile(leading:CircleAvatar(backgroundColor:const Color(0xFF30276B),child:Icon(item.$1,color:const Color(0xFFB9A6FF))),title:Text(item.$2,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text(item.$3),children:[Padding(padding:const EdgeInsets.fromLTRB(72,0,16,18),child:Text(item.$4))])))]));
   }
 }
+
+// -------------------- PROFILE AND SETTINGS --------------------
 
 // -------------------- PROFILE AND SETTINGS --------------------
 
