@@ -13,7 +13,7 @@ const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const String supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
 
 String get storageKey =>
-    'writers_haven_saved_data_${Supabase.instance.client.auth.currentUser!.id}';
+    'writers_haven_saved_data_${Supabase.instance.client.auth.currentUser?.id ?? 'guest'}';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,8 +21,11 @@ Future<void> main() async {
     runApp(const SupabaseSetupRequiredApp());
     return;
   }
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
-  runApp(const AuthGate());
+  if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
+  }
+  // Open the writing workspace directly while authentication is being deferred.
+  runApp(const WritersHavenApp());
 }
 
 // -------------------- THEMES --------------------
@@ -172,26 +175,31 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   Future<void> loadSavedData() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) throw Exception('No signed-in user');
+      final user = Supabase.instance.isInitialized
+          ? Supabase.instance.client.auth.currentUser
+          : null;
       final preferences = await SharedPreferences.getInstance();
       final localText = preferences.getString(storageKey);
-      final remoteRow = await Supabase.instance.client
-          .from('writer_workspaces')
-          .select('data')
-          .eq('user_id', user.id)
-          .maybeSingle();
+      final remoteRow = user == null
+          ? null
+          : await Supabase.instance.client
+              .from('writer_workspaces')
+              .select('data')
+              .eq('user_id', user.id)
+              .maybeSingle();
 
       if (remoteRow != null && remoteRow['data'] is Map) {
         _applySavedData(Map<String, dynamic>.from(remoteRow['data'] as Map));
       } else if (localText != null) {
         final localData = jsonDecode(localText) as Map<String, dynamic>;
         _applySavedData(localData);
-        await Supabase.instance.client.from('writer_workspaces').upsert({
-          'user_id': user.id,
-          'data': localData,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        if (user != null) {
+          await Supabase.instance.client.from('writer_workspaces').upsert({
+            'user_id': user.id,
+            'data': localData,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        }
       }
     } catch (error) {
       debugPrint('Could not load cloud workspace: $error');
@@ -214,16 +222,19 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   Future<void> saveData() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) throw Exception('No signed-in user');
+      final user = Supabase.instance.isInitialized
+          ? Supabase.instance.client.auth.currentUser
+          : null;
       final data = _workspaceData();
       final preferences = await SharedPreferences.getInstance();
       final localSuccess = await preferences.setString(storageKey, jsonEncode(data));
-      await Supabase.instance.client.from('writer_workspaces').upsert({
-        'user_id': user.id,
-        'data': data,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      if (user != null) {
+        await Supabase.instance.client.from('writer_workspaces').upsert({
+          'user_id': user.id,
+          'data': data,
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      }
       if (mounted) setState(() => saveFailed = !localSuccess);
     } catch (error) {
       debugPrint('Could not save workspace: $error');
@@ -332,7 +343,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onUpdateChapterTitle: updateChapterTitle,
         onUpdateChapterContent: updateChapterContent,
       ),
-      CalendarScreen(userId: Supabase.instance.client.auth.currentUser!.id),
+      const CalendarScreen(userId: 'guest'),
       const SimpleScreen(
         title: 'Ideas',
         subtitle: 'Keep your story ideas organised.',
@@ -1355,18 +1366,12 @@ class ProfileScreen extends StatelessWidget {
               subtitle: Text(
                 saveFailed
                     ? 'Cloud sync needs attention. Check your connection and try again.'
-                    : 'Your books are saved to your account and synced across devices.',
+                    : 'Your books are saved securely on this device. Account sync will be added later.',
               ),
             ),
           ),
           const SizedBox(height: 16),
-          FilledButton.tonalIcon(
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Sign out'),
-          ),
+          const SizedBox(height: 4),
           const SizedBox(height: 12),
           const Text('Writers Haven', textAlign: TextAlign.center),
           const Text(
