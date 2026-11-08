@@ -646,16 +646,22 @@ class BooksScreen extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Row(children: [
-                        Container(
-                          width: 68, height: 82,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft, end: Alignment.bottomRight,
-                              colors: [Color(0xFF7995C9), Color(0xFF202A59), Color(0xFFB17E9D)],
-                            ),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 68,
+                            height: 82,
+                            child: Stack(fit: StackFit.expand, children: [
+                              CustomPaint(painter: _NightLandscapePainter()),
+                              const Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding: EdgeInsets.only(bottom: 7),
+                                  child: Icon(Icons.auto_stories, color: Colors.white, size: 23),
+                                ),
+                              ),
+                            ]),
                           ),
-                          child: const Icon(Icons.auto_stories, color: Colors.white, size: 30),
                         ),
                         const SizedBox(width: 14),
                         Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
