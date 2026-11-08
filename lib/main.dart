@@ -614,45 +614,57 @@ class BooksScreen extends StatelessWidget {
                 final book = books[index];
 
                 return Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.menu_book),
-                    ),
-                    title: Text(book.title),
-                    subtitle: Text(
-                      '${book.chapters.length} chapters · '
-                      '${book.totalWords} words',
-                    ),
-                    trailing: IconButton(
-                      tooltip: 'Delete book',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => confirmDeleteBook(context, book),
-                    ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute<void>(
                           builder: (_) => BookWorkspace(
                             book: book,
-                            onUpdateBookTitle: (title) =>
-                                onUpdateBookTitle(book, title),
-                            onUpdateBookDescription: (description) =>
-                                onUpdateBookDescription(book, description),
+                            onUpdateBookTitle: (title) => onUpdateBookTitle(book, title),
+                            onUpdateBookDescription: (description) => onUpdateBookDescription(book, description),
                             onAddChapter: () => onAddChapter(book),
-                            onDeleteChapter: (chapter) =>
-                                onDeleteChapter(book, chapter),
-                            onUpdateChapterTitle: (chapter, title) =>
-                                onUpdateChapterTitle(book, chapter, title),
-                            onUpdateChapterContent: (chapter, content) =>
-                                onUpdateChapterContent(
-                                  book,
-                                  chapter,
-                                  content,
-                                ),
+                            onDeleteChapter: (chapter) => onDeleteChapter(book, chapter),
+                            onUpdateChapterTitle: (chapter, title) => onUpdateChapterTitle(book, chapter, title),
+                            onUpdateChapterContent: (chapter, content) => onUpdateChapterContent(book, chapter, content),
                           ),
                         ),
                       );
                     },
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(children: [
+                        Container(
+                          width: 68, height: 82,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            gradient: const LinearGradient(
+                              begin: Alignment.topLeft, end: Alignment.bottomRight,
+                              colors: [Color(0xFF7995C9), Color(0xFF202A59), Color(0xFFB17E9D)],
+                            ),
+                          ),
+                          child: const Icon(Icons.auto_stories, color: Colors.white, size: 30),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(book.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(height: 5),
+                          Text('${book.chapters.length} chapters · ${book.totalWords} words', style: const TextStyle(color: Color(0xFF9AA7C4), fontSize: 12)),
+                          const SizedBox(height: 9),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: const Color(0xFF174C50), borderRadius: BorderRadius.circular(20)),
+                            child: const Text('In Progress', style: TextStyle(color: Color(0xFF9CE6D8), fontSize: 10)),
+                          ),
+                        ])),
+                        IconButton(
+                          tooltip: 'Delete book',
+                          icon: const Icon(Icons.more_vert),
+                          onPressed: () => confirmDeleteBook(context, book),
+                        ),
+                      ]),
+                    ),
                   ),
                 );
               },
