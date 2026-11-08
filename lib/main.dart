@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'auth_gate.dart';
+import 'calendar_screen.dart';
 
 const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const String supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
@@ -331,11 +332,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onUpdateChapterTitle: updateChapterTitle,
         onUpdateChapterContent: updateChapterContent,
       ),
-      const SimpleScreen(
-        title: 'Calendar',
-        subtitle: 'Your writing schedule will live here.',
-        icon: Icons.calendar_month,
-      ),
+      CalendarScreen(userId: Supabase.instance.client.auth.currentUser!.id),
       const SimpleScreen(
         title: 'Ideas',
         subtitle: 'Keep your story ideas organised.',
