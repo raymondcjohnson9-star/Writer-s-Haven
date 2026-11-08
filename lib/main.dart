@@ -36,13 +36,13 @@ class HavenTheme {
 }
 
 const List<HavenTheme> havenThemes = [
-  HavenTheme('Royal Purple', Color(0xFF7045A5), Brightness.light),
-  HavenTheme('Emerald Garden', Color(0xFF16866A), Brightness.light),
-  HavenTheme('Midnight Blue', Color(0xFF243B64), Brightness.light),
-  HavenTheme('Rose Blush', Color(0xFFCE718D), Brightness.light),
-  HavenTheme('Autumn Pages', Color(0xFFAD6334), Brightness.light),
+  HavenTheme('Midnight Purple', Color(0xFF7560FF), Brightness.dark),
+  HavenTheme('Emerald Night', Color(0xFF16866A), Brightness.dark),
+  HavenTheme('Deep Ocean', Color(0xFF315DAD), Brightness.dark),
+  HavenTheme('Rose Night', Color(0xFFCE718D), Brightness.dark),
+  HavenTheme('Autumn Night', Color(0xFFAD6334), Brightness.dark),
   HavenTheme('Pure Black', Color(0xFF151515), Brightness.dark),
-  HavenTheme('Clean White', Color(0xFF777777), Brightness.light),
+  HavenTheme('Soft Midnight', Color(0xFF777777), Brightness.dark),
 ];
 
 int countWords(String text) {
@@ -349,12 +349,70 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
       debugShowCheckedModeBanner: false,
       title: 'Writers Haven',
       theme: ThemeData(
+        brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
           seedColor: theme.color,
-          brightness: theme.brightness,
+          brightness: Brightness.dark,
+          surface: const Color(0xFF101A30),
+        ).copyWith(
+          primary: const Color(0xFF7660FF),
+          secondary: const Color(0xFFB49AFF),
+          surface: const Color(0xFF101A30),
+          onSurface: const Color(0xFFF1F0FF),
         ),
+        scaffoldBackgroundColor: const Color(0xFF070F20),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(centerTitle: false),
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          backgroundColor: Color(0xFF070F20),
+          foregroundColor: Color(0xFFF5F2FF),
+          elevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF101B32),
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFF293B64)),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: const Color(0xFF0B1428),
+          indicatorColor: const Color(0xFF30276B),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFFB9A6FF)
+                : const Color(0xFF8994B2),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          )),
+          iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFFB9A6FF)
+                : const Color(0xFF8994B2),
+          )),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF0B1428),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF293B64)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF293B64)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF8A75FF), width: 1.5),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF7560FF),
+          foregroundColor: Colors.white,
+        ),
       ),
       home: isLoading
           ? const Scaffold(
