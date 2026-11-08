@@ -6,23 +6,24 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'auth_gate.dart';
 import 'calendar_screen.dart';
 
 const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const String supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+bool supabaseReady = false;
 
-String get storageKey =>
-    'writers_haven_saved_data_${Supabase.instance.client.auth.currentUser?.id ?? 'guest'}';
+String get storageKey {
+  final userId = supabaseReady
+      ? Supabase.instance.client.auth.currentUser?.id ?? 'guest'
+      : 'guest';
+  return 'writers_haven_saved_data_$userId';
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (supabaseUrl.isEmpty || supabasePublishableKey.isEmpty) {
-    runApp(const SupabaseSetupRequiredApp());
-    return;
-  }
   if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
     await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
+    supabaseReady = true;
   }
   // Open the writing workspace directly while authentication is being deferred.
   runApp(const WritersHavenApp());
@@ -175,9 +176,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   Future<void> loadSavedData() async {
     try {
-      final user = Supabase.instance.isInitialized
-          ? Supabase.instance.client.auth.currentUser
-          : null;
+      final user = supabaseReady ? Supabase.instance.client.auth.currentUser : null;
       final preferences = await SharedPreferences.getInstance();
       final localText = preferences.getString(storageKey);
       final remoteRow = user == null
@@ -222,9 +221,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   Future<void> saveData() async {
     try {
-      final user = Supabase.instance.isInitialized
-          ? Supabase.instance.client.auth.currentUser
-          : null;
+      final user = supabaseReady ? Supabase.instance.client.auth.currentUser : null;
       final data = _workspaceData();
       final preferences = await SharedPreferences.getInstance();
       final localSuccess = await preferences.setString(storageKey, jsonEncode(data));
