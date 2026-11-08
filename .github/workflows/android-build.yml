@@ -7,6 +7,7 @@ on:
     branches:
       - main
       - 'feature/**'
+      - 'design/**'
   pull_request:
     branches:
       - main
