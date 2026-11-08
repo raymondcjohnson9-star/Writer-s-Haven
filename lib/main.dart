@@ -471,38 +471,49 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
 // -------------------- HOME SCREEN --------------------
 
-class HomeScreen extends StatelessWidget {
-  final List<Book> books; final VoidCallback onOpenBooks; final VoidCallback onOpenCalendar; final VoidCallback onOpenLibrary;
-  const HomeScreen({super.key, required this.books, required this.onOpenBooks, required this.onOpenCalendar, required this.onOpenLibrary});
-  @override Widget build(BuildContext context) {
-    final totalWords = books.fold<int>(0, (total, book) => total + book.totalWords);
-    final recent = books.reversed.take(3).toList();
-    return Scaffold(body: ListView(padding: const EdgeInsets.fromLTRB(18,18,18,28), children: [
-      Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Good morning,', style: TextStyle(color: Colors.white70)),
-        Text('Writer 👑', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-        const Text('Small steps. Big stories.', style: TextStyle(color: Color(0xFFADB8D2))),
-      ])), IconButton(onPressed: () {}, icon: const Icon(Icons.notifications_none_rounded)), IconButton(onPressed: onOpenLibrary, icon: const Icon(Icons.settings_outlined))]),
-      const SizedBox(height:20),
-      Container(padding: const EdgeInsets.all(18), decoration: BoxDecoration(gradient: const LinearGradient(colors:[Color(0xFF25205C),Color(0xFF172B50)]), borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFF51468F))), child: Row(children:[const CircleAvatar(radius:25,backgroundColor:Color(0xFF7560FF),child:Icon(Icons.auto_stories,color:Colors.white)),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Your writing progress',style:TextStyle(color:Color(0xFFC9C0FF))),const SizedBox(height:4),Text('$totalWords words written',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),const Icon(Icons.trending_up,color:Color(0xFFB9A6FF),size:28)])),
-      const SizedBox(height:16),
-      GridView.count(crossAxisCount:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:1.22,children:[
-        _HomeAction(icon:Icons.menu_book_rounded,title:'My Stories',subtitle:'Manage your stories',onTap:onOpenBooks),
-        _HomeAction(icon:Icons.calendar_month_rounded,title:'Calendar',subtitle:'Plan your writing',onTap:onOpenCalendar),
-        _HomeAction(icon:Icons.edit_note_rounded,title:'Drafts',subtitle:'Continue where you left off',onTap:onOpenBooks),
-        _HomeAction(icon:Icons.local_library_rounded,title:'Library',subtitle:'Writing resources',onTap:onOpenLibrary),
-      ]),
-      const SizedBox(height:24), Row(children:[Expanded(child:Text('Recent Stories',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),TextButton(onPressed:onOpenBooks,child:const Text('See all  ›'))]),
-      if(recent.isEmpty) const Card(child:ListTile(leading:Icon(Icons.auto_stories),title:Text('Your first story starts here'),subtitle:Text('Tap My Stories to create a book.'))) else ...recent.map((book)=>_StoryTile(book:book,onTap:onOpenBooks)),
-    ])));
+class _NightLandscapePainter extends CustomPainter {
+  @override void paint(Canvas canvas, Size size) {
+    final rect=Offset.zero&size;
+    canvas.drawRect(rect,Paint()..shader=const LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Color(0xFF080F2C),Color(0xFF29285B),Color(0xFFB46C91),Color(0xFF17264D)],stops:[0,.43,.72,1]).createShader(rect));
+    final star=Paint()..color=const Color(0xFFE7DFFF);
+    for(var i=0;i<46;i++){final x=((i*73+19)%997)/997*size.width;final y=((i*47+11)%389)/389*size.height*.57;canvas.drawCircle(Offset(x,y),i%7==0?1.5:.75,star);}
+    canvas.drawCircle(Offset(size.width*.76,size.height*.59),size.width*.38,Paint()..shader=RadialGradient(colors:[const Color(0xFFFFC1A2).withOpacity(.55),Colors.transparent]).createShader(Rect.fromCircle(center:Offset(size.width*.76,size.height*.59),radius:size.width*.38)));
+    Path ridge(double y,double a,double b,double c)=>Path()..moveTo(0,size.height*y)..lineTo(size.width*.18,size.height*a)..lineTo(size.width*.34,size.height*(a-.12))..lineTo(size.width*.52,size.height*b)..lineTo(size.width*.72,size.height*(b-.08))..lineTo(size.width*.88,size.height*c)..lineTo(size.width,size.height*(c+.04))..lineTo(size.width,size.height)..lineTo(0,size.height)..close();
+    canvas.drawPath(ridge(.72,.49,.62,.53),Paint()..color=const Color(0xFF28375F));
+    canvas.drawPath(ridge(.82,.61,.72,.64),Paint()..color=const Color(0xFF111D3D));
+    canvas.drawRect(Rect.fromLTWH(0,size.height*.72,size.width,size.height*.28),Paint()..shader=const LinearGradient(colors:[Color(0xFF27365E),Color(0xFF111B38)]).createShader(Rect.fromLTWH(0,size.height*.72,size.width,size.height*.28)));
+    final reflection=Paint()..color=const Color(0xFFFFB58E).withOpacity(.26)..strokeWidth=2;
+    for(var i=0;i<15;i++){final y=size.height*(.76+i*.014),w=size.width*(.08+(i%4)*.045);canvas.drawLine(Offset(size.width*.65-w,y),Offset(size.width*.65+w,y),reflection);}
+    final x=size.width*.77,y=size.height*.66;
+    canvas.drawPath(Path()..moveTo(x-size.width*.09,y)..lineTo(x,y-size.height*.105)..lineTo(x+size.width*.1,y)..close(),Paint()..color=const Color(0xFF10172D));
+    canvas.drawRect(Rect.fromLTWH(x-size.width*.073,y,size.width*.146,size.height*.105),Paint()..color=const Color(0xFF18213B));
+    final lit=Paint()..color=const Color(0xFFFFC47C)..maskFilter=const MaskFilter.blur(BlurStyle.normal,5);
+    canvas.drawRect(Rect.fromLTWH(x-size.width*.045,y+size.height*.035,size.width*.027,size.height*.035),lit);
+    canvas.drawRect(Rect.fromLTWH(x+size.width*.018,y+size.height*.035,size.width*.027,size.height*.035),lit);
   }
+  @override bool shouldRepaint(covariant CustomPainter oldDelegate)=>false;
 }
-class _HomeAction extends StatelessWidget { final IconData icon; final String title; final String subtitle; final VoidCallback onTap; const _HomeAction({required this.icon,required this.title,required this.subtitle,required this.onTap});
-  @override Widget build(BuildContext context)=>Material(color:const Color(0xFF101B32),borderRadius:BorderRadius.circular(18),child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(18),child:Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),border:Border.all(color:const Color(0xFF293B64))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:29,color:const Color(0xFFB49AFF)),const Spacer(),Text(title,style:const TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:3),Text(subtitle,style:const TextStyle(fontSize:11,color:Color(0xFF9AA7C4)))]))));
+
+class HomeScreen extends StatelessWidget {
+ final List<Book> books; final VoidCallback onOpenBooks,onOpenCalendar,onOpenLibrary;
+ const HomeScreen({super.key,required this.books,required this.onOpenBooks,required this.onOpenCalendar,required this.onOpenLibrary});
+ @override Widget build(BuildContext context){
+  final words=books.fold<int>(0,(n,b)=>n+b.totalWords);final recent=books.reversed.take(3).toList();
+  return Scaffold(body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,28),children:[
+   ClipRRect(borderRadius:BorderRadius.circular(22),child:SizedBox(height:210,child:Stack(fit:StackFit.expand,children:[CustomPaint(painter:_NightLandscapePainter()),DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.black.withOpacity(.08),const Color(0xFF090F25).withOpacity(.78)]))),Positioned(top:8,right:8,child:Row(children:[IconButton(onPressed:()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('You are all caught up.'))),icon:const Icon(Icons.notifications_none_rounded,color:Colors.white)),IconButton(onPressed:onOpenLibrary,icon:const Icon(Icons.settings_outlined,color:Colors.white))])),const Positioned(left:18,bottom:17,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(Icons.auto_stories_rounded,size:35,color:Color(0xFFFFD0B1)),SizedBox(height:5),Text('Writers Haven',style:TextStyle(fontSize:25,fontWeight:FontWeight.w700,color:Colors.white)),Text('Your story matters',style:TextStyle(color:Color(0xFFE3DDFB),letterSpacing:1.2))]))]))),
+   const SizedBox(height:18),Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Good morning,',style:TextStyle(color:Colors.white70)),Text('Writer 👑',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w800)),const Text('Small steps. Big stories.',style:TextStyle(color:Color(0xFFADB8D2)))]))]),
+   const SizedBox(height:14),Container(padding:const EdgeInsets.all(17),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xFF25205C),Color(0xFF172B50)]),borderRadius:BorderRadius.circular(20),border:Border.all(color:const Color(0xFF51468F))),child:Row(children:[const CircleAvatar(radius:24,backgroundColor:Color(0xFF7560FF),child:Icon(Icons.auto_stories,color:Colors.white)),const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Your writing progress',style:TextStyle(color:Color(0xFFC9C0FF))),const SizedBox(height:4),Text('$words words written',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),const Icon(Icons.trending_up,color:Color(0xFFB9A6FF),size:28)])),
+   const SizedBox(height:16),GridView.count(crossAxisCount:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:1.22,children:[_HomeAction(icon:Icons.menu_book_rounded,title:'My Stories',subtitle:'Manage your stories',onTap:onOpenBooks),_HomeAction(icon:Icons.calendar_month_rounded,title:'Calendar',subtitle:'Plan your writing',onTap:onOpenCalendar),_HomeAction(icon:Icons.edit_note_rounded,title:'Drafts',subtitle:'Continue where you left off',onTap:onOpenBooks),_HomeAction(icon:Icons.local_library_rounded,title:'Library',subtitle:'Your saved resources',onTap:onOpenLibrary)]),
+   const SizedBox(height:20),Row(children:[Expanded(child:Text('Recent Stories',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),TextButton(onPressed:onOpenBooks,child:const Text('See all  ›'))]),
+   if(recent.isEmpty)const Card(child:ListTile(leading:Icon(Icons.auto_stories),title:Text('Your first story starts here'),subtitle:Text('Tap My Stories to create a book.')))else ...recent.map((b)=>_StoryTile(book:b,onTap:onOpenBooks)),
+  ])));
+ }
 }
-class _StoryTile extends StatelessWidget { final Book book; final VoidCallback onTap; const _StoryTile({required this.book,required this.onTap});
-  @override Widget build(BuildContext context)=>Card(child:ListTile(onTap:onTap,contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:7),leading:Container(width:54,height:64,decoration:BoxDecoration(borderRadius:BorderRadius.circular(10),gradient:const LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,colors:[Color(0xFF526A9F),Color(0xFF171D43),Color(0xFF9A6C9C)])),child:const Icon(Icons.menu_book_rounded,color:Colors.white)),title:Text(book.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('${book.chapters.length} chapters · ${book.totalWords} words'),trailing:const Icon(Icons.more_vert,color:Color(0xFF9AA7C4))));
+class _HomeAction extends StatelessWidget{final IconData icon;final String title,subtitle;final VoidCallback onTap;const _HomeAction({required this.icon,required this.title,required this.subtitle,required this.onTap});@override Widget build(BuildContext context)=>Material(color:const Color(0xFF101B32),borderRadius:BorderRadius.circular(18),child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(18),child:Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),border:Border.all(color:const Color(0xFF293B64))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:29,color:const Color(0xFFB49AFF)),const Spacer(),Text(title,style:const TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:3),Text(subtitle,style:const TextStyle(fontSize:11,color:Color(0xFF9AA7C4)))]))));
 }
+class _StoryTile extends StatelessWidget{final Book book;final VoidCallback onTap;const _StoryTile({required this.book,required this.onTap});@override Widget build(BuildContext context)=>Card(clipBehavior:Clip.antiAlias,child:ListTile(onTap:onTap,contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:7),leading:ClipRRect(borderRadius:BorderRadius.circular(9),child:SizedBox(width:55,height:66,child:CustomPaint(painter:_NightLandscapePainter(),child:const Icon(Icons.auto_stories_rounded,color:Colors.white)))),title:Text(book.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('${book.chapters.length} chapters · ${book.totalWords} words'),trailing:const Icon(Icons.more_vert,color:Color(0xFF9AA7C4))));}
+
+// -------------------- BOOKSHELF --------------------
 
 // -------------------- BOOKSHELF --------------------
 
@@ -1162,89 +1173,18 @@ class LibraryScreen extends StatelessWidget { const LibraryScreen({super.key});
 // -------------------- PROFILE AND SETTINGS --------------------
 
 class ProfileScreen extends StatelessWidget {
-  final int selectedTheme;
-  final ValueChanged<int> onThemeChanged;
-  final bool saveFailed;
-
-  const ProfileScreen({
-    super.key,
-    required this.selectedTheme,
-    required this.onThemeChanged,
-    required this.saveFailed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile & Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const CircleAvatar(
-            radius: 38,
-            child: Icon(Icons.person, size: 42),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Writer',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Make yourself at home. Your stories start here.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Appearance',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          const Text('Choose the colour theme for your writing space.'),
-          const SizedBox(height: 12),
-          ...List.generate(havenThemes.length, (index) {
-            final theme = havenThemes[index];
-
-            return Card(
-              child: RadioListTile<int>(
-                value: index,
-                groupValue: selectedTheme,
-                onChanged: (value) {
-                  if (value != null) onThemeChanged(value);
-                },
-                secondary: CircleAvatar(
-                  radius: 14,
-                  backgroundColor: theme.color,
-                ),
-                title: Text(theme.name),
-              ),
-            );
-          }),
-          const SizedBox(height: 20),
-          Card(
-            child: ListTile(
-              leading: Icon(
-                saveFailed ? Icons.warning_amber : Icons.save_outlined,
-              ),
-              title: const Text('Writing storage'),
-              subtitle: Text(
-                saveFailed
-                    ? 'Cloud sync needs attention. Check your connection and try again.'
-                    : 'Your books are saved securely on this device. Account sync will be added later.',
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          const SizedBox(height: 4),
-          const SizedBox(height: 12),
-          const Text('Writers Haven', textAlign: TextAlign.center),
-          const Text(
-            'A home for your stories.',
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+ final int selectedTheme;final ValueChanged<int> onThemeChanged;final bool saveFailed;
+ const ProfileScreen({super.key,required this.selectedTheme,required this.onThemeChanged,required this.saveFailed});
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Profile')),body:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,28),children:[
+  ClipRRect(borderRadius:BorderRadius.circular(24),child:SizedBox(height:185,child:Stack(fit:StackFit.expand,children:[CustomPaint(painter:_NightLandscapePainter()),DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.transparent,const Color(0xFF080F20).withOpacity(.9)]))),const Positioned(left:0,right:0,bottom:14,child:Column(children:[CircleAvatar(radius:39,backgroundColor:Color(0xFF161E42),child:CircleAvatar(radius:35,backgroundColor:Color(0xFF7560FF),child:Text('W',style:TextStyle(fontSize:34,fontWeight:FontWeight.bold,color:Colors.white)))),SizedBox(height:8),Text('Writer 👑',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Colors.white)),Text('Writer · Dreamer · Creator',style:TextStyle(color:Color(0xFFD3C9F3),fontSize:12))]))]))),
+  const SizedBox(height:14),Row(children:[const _ProfileStat(value:'0',label:'Stories'),const _ProfileStat(value:'0',label:'Followers'),const _ProfileStat(value:'0',label:'Following')]),
+  const SizedBox(height:18),const Text('Turning ideas into stories. Building a better tomorrow, one chapter at a time.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFFB9C2D8))),const SizedBox(height:18),
+  Card(child:ListTile(leading:const Icon(Icons.person_outline),title:const Text('Account'),subtitle:const Text('Guest workspace · no sign-in required'),trailing:const Icon(Icons.chevron_right),onTap:()=>showDialog<void>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Guest workspace'),content:const Text('Write without creating an account. Your stories stay on this device.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('OK'))])))),
+  Card(child:ListTile(leading:const Icon(Icons.notifications_none),title:const Text('Notifications'),subtitle:const Text('Writing reminders and calendar alerts'),trailing:const Icon(Icons.chevron_right),onTap:()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Manage writing reminders in Calendar.'))))),
+  const SizedBox(height:12),Text('Appearance',style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:8),...List.generate(havenThemes.length,(i){final t=havenThemes[i];return Card(child:RadioListTile<int>(value:i,groupValue:selectedTheme,onChanged:(v){if(v!=null)onThemeChanged(v);},secondary:CircleAvatar(radius:14,backgroundColor:t.color),title:Text(t.name)));}),
+  Card(child:ListTile(leading:Icon(saveFailed?Icons.warning_amber:Icons.save_outlined),title:const Text('Data & Storage'),subtitle:Text(saveFailed?'Local save needs attention.':'Your stories are saved on this device.'))),
+  const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Your creative space, always within reach.'))),
+  const SizedBox(height:14),const Center(child:Text('WRITERS HAVEN  ·  YOUR STORY MATTERS',style:TextStyle(fontSize:10,letterSpacing:2,color:Color(0xFF8994B2)))),
+ ]));
 }
+class _ProfileStat extends StatelessWidget{final String value,label;const _ProfileStat({required this.value,required this.label});@override Widget build(BuildContext context)=>Expanded(child:Container(margin:const EdgeInsets.symmetric(horizontal:4),padding:const EdgeInsets.symmetric(vertical:13),decoration:BoxDecoration(color:const Color(0xFF101B32),borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFF293B64))),child:Column(children:[Text(value,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:3),Text(label,style:const TextStyle(fontSize:11,color:Color(0xFF9AA7C4)))])));}
