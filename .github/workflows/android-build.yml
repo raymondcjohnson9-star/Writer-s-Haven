@@ -69,9 +69,10 @@ jobs:
 
           if "coreLibraryDesugaring(" not in content and "coreLibraryDesugaring '" not in content:
               marker = "dependencies {"
-              if marker not in content:
-                  raise SystemExit("Could not find dependencies block in " + str(gradle_file))
-              content = content.replace(marker, marker + "\n    " + dependency, 1)
+              if marker in content:
+                  content = content.replace(marker, marker + "\n    " + dependency, 1)
+              else:
+                  content = content.rstrip() + "\n\ndependencies {\n    " + dependency + "\n}\n"
 
           gradle_file.write_text(content)
           print("Enabled core library desugaring in", gradle_file)
