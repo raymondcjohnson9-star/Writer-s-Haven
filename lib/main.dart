@@ -872,6 +872,12 @@ class _BookWorkspaceState extends State<BookWorkspace> {
     setState(() => _loadChapter(chapter));
   }
 
+  Future<void> _exportBookAsText() async {
+    final output = StringBuffer()..writeln(widget.book.title)..writeln(widget.book.description)..writeln();
+    for (final item in widget.book.chapters) { output.writeln(item.title); output.writeln(item.content); output.writeln(); }
+    await SharePlus.instance.share(ShareParams(title: 'Export ' + widget.book.title, text: output.toString()));
+  }
+
   void _addChapter() {
     widget.onAddChapter();
 
@@ -966,6 +972,11 @@ class _BookWorkspaceState extends State<BookWorkspace> {
             tooltip: 'Edit book details',
             onPressed: _editBookDetails,
             icon: const Icon(Icons.edit_outlined),
+          ),
+          IconButton(
+            tooltip: 'Export story as text',
+            onPressed: _exportBookAsText,
+            icon: const Icon(Icons.ios_share_outlined),
           ),
           IconButton(
             tooltip: 'Add chapter',
