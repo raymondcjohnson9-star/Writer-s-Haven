@@ -1,4 +1,3 @@
-
 name: Build Writers Haven APK
 
 on:
@@ -7,9 +6,11 @@ on:
     branches:
       - main
       - 'feature/**'
+      - 'design/**'
   pull_request:
     branches:
       - main
+      - 'feature/**'
 
 permissions:
   contents: read
@@ -37,6 +38,46 @@ jobs:
       - name: Generate Android platform files
         run: flutter create --platforms=android --project-name writers_haven .
 
+      - name: Enable Android core library desugaring
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          candidates = [
+              Path("android/app/build.gradle.kts"),
+              Path("android/app/build.gradle"),
+          ]
+          gradle_file = next((path for path in candidates if path.exists()), None)
+          if gradle_file is None:
+              raise SystemExit("Could not find generated Android app Gradle file")
+
+          content = gradle_file.read_text()
+          is_kotlin_dsl = gradle_file.suffix == ".kts"
+
+          if is_kotlin_dsl:
+              compile_setting = "isCoreLibraryDesugaringEnabled = true"
+              dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          else:
+              compile_setting = "coreLibraryDesugaringEnabled true"
+              dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+
+          if "CoreLibraryDesugaringEnabled" not in content and "coreLibraryDesugaringEnabled" not in content:
+              marker = "compileOptions {"
+              if marker not in content:
+                  raise SystemExit("Could not find compileOptions block in " + str(gradle_file))
+              content = content.replace(marker, marker + "\n        " + compile_setting, 1)
+
+          if "coreLibraryDesugaring(" not in content and "coreLibraryDesugaring '" not in content:
+              marker = "dependencies {"
+              if marker in content:
+                  content = content.replace(marker, marker + "\n    " + dependency, 1)
+              else:
+                  content = content.rstrip() + "\n\ndependencies {\n    " + dependency + "\n}\n"
+
+          gradle_file.write_text(content)
+          print("Enabled core library desugaring in", gradle_file)
+          PY
+
       - name: Install dependencies
         run: flutter pub get
 
@@ -51,4 +92,3 @@ jobs:
         with:
           name: writers-haven-debug-apk
           path: build/app/outputs/flutter-apk/app-debug.apk
-          

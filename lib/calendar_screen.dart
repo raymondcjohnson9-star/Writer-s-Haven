@@ -16,7 +16,7 @@ class CalendarScreen extends StatefulWidget {
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
-  static const _notifications = FlutterLocalNotificationsPlugin();
+  static final _notifications = FlutterLocalNotificationsPlugin();
   late final String _storageKey;
   DateTime _selectedDate = DateUtils.dateOnly(DateTime.now());
   List<_WritingTask> _tasks = [];

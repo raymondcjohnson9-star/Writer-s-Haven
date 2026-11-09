@@ -1,28 +1,33 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'auth_gate.dart';
 import 'calendar_screen.dart';
 
 const String supabaseUrl = String.fromEnvironment('SUPABASE_URL');
 const String supabasePublishableKey = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
+bool supabaseReady = false;
 
-String get storageKey =>
-    'writers_haven_saved_data_${Supabase.instance.client.auth.currentUser!.id}';
+String get storageKey {
+  final userId = supabaseReady
+      ? Supabase.instance.client.auth.currentUser?.id ?? 'guest'
+      : 'guest';
+  return 'writers_haven_saved_data_$userId';
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  if (supabaseUrl.isEmpty || supabasePublishableKey.isEmpty) {
-    runApp(const SupabaseSetupRequiredApp());
-    return;
+  if (supabaseUrl.isNotEmpty && supabasePublishableKey.isNotEmpty) {
+    await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
+    supabaseReady = true;
   }
-  await Supabase.initialize(url: supabaseUrl, anonKey: supabasePublishableKey);
-  runApp(const AuthGate());
+  // Open the writing workspace directly while authentication is being deferred.
+  runApp(const WritersHavenApp());
 }
 
 // -------------------- THEMES --------------------
@@ -36,13 +41,13 @@ class HavenTheme {
 }
 
 const List<HavenTheme> havenThemes = [
-  HavenTheme('Royal Purple', Color(0xFF7045A5), Brightness.light),
-  HavenTheme('Emerald Garden', Color(0xFF16866A), Brightness.light),
-  HavenTheme('Midnight Blue', Color(0xFF243B64), Brightness.light),
-  HavenTheme('Rose Blush', Color(0xFFCE718D), Brightness.light),
-  HavenTheme('Autumn Pages', Color(0xFFAD6334), Brightness.light),
+  HavenTheme('Midnight Purple', Color(0xFF7560FF), Brightness.dark),
+  HavenTheme('Emerald Night', Color(0xFF16866A), Brightness.dark),
+  HavenTheme('Deep Ocean', Color(0xFF315DAD), Brightness.dark),
+  HavenTheme('Rose Night', Color(0xFFCE718D), Brightness.dark),
+  HavenTheme('Autumn Night', Color(0xFFAD6334), Brightness.dark),
   HavenTheme('Pure Black', Color(0xFF151515), Brightness.dark),
-  HavenTheme('Clean White', Color(0xFF777777), Brightness.light),
+  HavenTheme('Soft Midnight', Color(0xFF777777), Brightness.dark),
 ];
 
 int countWords(String text) {
@@ -83,12 +88,14 @@ class Book {
   String title;
   String description;
   List<Chapter> chapters;
+  bool isFavorite;
 
   Book({
     required this.id,
     required this.title,
     this.description = '',
     List<Chapter>? chapters,
+    this.isFavorite = false,
   }) : chapters = chapters ?? [];
 
   int get totalWords => chapters.fold<int>(
@@ -101,6 +108,7 @@ class Book {
         'title': title,
         'description': description,
         'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
+        'isFavorite': isFavorite,
       };
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -110,6 +118,7 @@ class Book {
       id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? 'Untitled Book',
       description: json['description'] as String? ?? '',
+      isFavorite: json['isFavorite'] as bool? ?? false,
       chapters: savedChapters
           .map(
             (item) => Chapter.fromJson(
@@ -172,26 +181,29 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   Future<void> loadSavedData() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) throw Exception('No signed-in user');
+      final user = supabaseReady ? Supabase.instance.client.auth.currentUser : null;
       final preferences = await SharedPreferences.getInstance();
       final localText = preferences.getString(storageKey);
-      final remoteRow = await Supabase.instance.client
-          .from('writer_workspaces')
-          .select('data')
-          .eq('user_id', user.id)
-          .maybeSingle();
+      final remoteRow = user == null
+          ? null
+          : await Supabase.instance.client
+              .from('writer_workspaces')
+              .select('data')
+              .eq('user_id', user.id)
+              .maybeSingle();
 
       if (remoteRow != null && remoteRow['data'] is Map) {
         _applySavedData(Map<String, dynamic>.from(remoteRow['data'] as Map));
       } else if (localText != null) {
         final localData = jsonDecode(localText) as Map<String, dynamic>;
         _applySavedData(localData);
-        await Supabase.instance.client.from('writer_workspaces').upsert({
-          'user_id': user.id,
-          'data': localData,
-          'updated_at': DateTime.now().toIso8601String(),
-        });
+        if (user != null) {
+          await Supabase.instance.client.from('writer_workspaces').upsert({
+            'user_id': user.id,
+            'data': localData,
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+        }
       }
     } catch (error) {
       debugPrint('Could not load cloud workspace: $error');
@@ -214,16 +226,17 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
   Future<void> saveData() async {
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) throw Exception('No signed-in user');
+      final user = supabaseReady ? Supabase.instance.client.auth.currentUser : null;
       final data = _workspaceData();
       final preferences = await SharedPreferences.getInstance();
       final localSuccess = await preferences.setString(storageKey, jsonEncode(data));
-      await Supabase.instance.client.from('writer_workspaces').upsert({
-        'user_id': user.id,
-        'data': data,
-        'updated_at': DateTime.now().toIso8601String(),
-      });
+      if (user != null) {
+        await Supabase.instance.client.from('writer_workspaces').upsert({
+          'user_id': user.id,
+          'data': data,
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+      }
       if (mounted) setState(() => saveFailed = !localSuccess);
     } catch (error) {
       debugPrint('Could not save workspace: $error');
@@ -306,6 +319,11 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     scheduleSave();
   }
 
+  void toggleFavorite(Book book) {
+    setState(() => book.isFavorite = !book.isFavorite);
+    scheduleSave();
+  }
+
   @override
   void dispose() {
     saveTimer?.cancel();
@@ -320,6 +338,8 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
       HomeScreen(
         books: books,
         onOpenBooks: () => setState(() => selectedTab = 1),
+        onOpenCalendar: () => setState(() => selectedTab = 2),
+        onOpenLibrary: () => setState(() => selectedTab = 3),
       ),
       BooksScreen(
         books: books,
@@ -331,30 +351,86 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onDeleteChapter: deleteChapter,
         onUpdateChapterTitle: updateChapterTitle,
         onUpdateChapterContent: updateChapterContent,
+        onToggleFavorite: toggleFavorite,
       ),
-      CalendarScreen(userId: Supabase.instance.client.auth.currentUser!.id),
-      const SimpleScreen(
-        title: 'Ideas',
-        subtitle: 'Keep your story ideas organised.',
-        icon: Icons.lightbulb_outline,
-      ),
+      const CalendarScreen(userId: 'guest'),
+      const LibraryScreen(),
       ProfileScreen(
         selectedTheme: selectedTheme,
         onThemeChanged: changeTheme,
         saveFailed: saveFailed,
       ),
+      WritingInsightsScreen(books: books),
     ];
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Writers Haven',
       theme: ThemeData(
+        brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
           seedColor: theme.color,
-          brightness: theme.brightness,
+          brightness: Brightness.dark,
+          surface: const Color(0xFF101A30),
+        ).copyWith(
+          primary: const Color(0xFF7660FF),
+          secondary: const Color(0xFFB49AFF),
+          surface: const Color(0xFF101A30),
+          onSurface: const Color(0xFFF1F0FF),
         ),
+        scaffoldBackgroundColor: const Color(0xFF070F20),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(centerTitle: false),
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          backgroundColor: Color(0xFF070F20),
+          foregroundColor: Color(0xFFF5F2FF),
+          elevation: 0,
+        ),
+        cardTheme: CardThemeData(
+          color: const Color(0xFF101B32),
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 6),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: Color(0xFF293B64)),
+          ),
+        ),
+        navigationBarTheme: NavigationBarThemeData(
+          backgroundColor: const Color(0xFF0B1428),
+          indicatorColor: const Color(0xFF30276B),
+          labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFFB9A6FF)
+                : const Color(0xFF8994B2),
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+          )),
+          iconTheme: WidgetStateProperty.resolveWith((states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? const Color(0xFFB9A6FF)
+                : const Color(0xFF8994B2),
+          )),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: const Color(0xFF0B1428),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF293B64)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF293B64)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFF8A75FF), width: 1.5),
+          ),
+        ),
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: Color(0xFF7560FF),
+          foregroundColor: Colors.white,
+        ),
       ),
       home: isLoading
           ? const Scaffold(
@@ -381,7 +457,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                   NavigationDestination(
                     icon: Icon(Icons.menu_book_outlined),
                     selectedIcon: Icon(Icons.menu_book),
-                    label: 'My Books',
+                    label: 'Stories',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.calendar_month_outlined),
@@ -389,15 +465,21 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                     label: 'Calendar',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.lightbulb_outline),
-                    selectedIcon: Icon(Icons.lightbulb),
-                    label: 'Ideas',
+                    icon: Icon(Icons.local_library_outlined),
+                    selectedIcon: Icon(Icons.local_library),
+                    label: 'Library',
                   ),
                   NavigationDestination(
                     icon: Icon(Icons.person_outline),
                     selectedIcon: Icon(Icons.person),
                     label: 'Profile',
                   ),
+                  NavigationDestination(
+                    icon: Icon(Icons.insights_outlined),
+                    selectedIcon: Icon(Icons.insights),
+                    label: 'Insights',
+                  ),
+
                 ],
               ),
             ),
@@ -407,148 +489,51 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
 
 // -------------------- HOME SCREEN --------------------
 
+class _NightLandscapePainter extends CustomPainter {
+  @override void paint(Canvas canvas, Size size) {
+    final rect=Offset.zero&size;
+    canvas.drawRect(rect,Paint()..shader=const LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Color(0xFF080F2C),Color(0xFF29285B),Color(0xFFB46C91),Color(0xFF17264D)],stops:[0,.43,.72,1]).createShader(rect));
+    final star=Paint()..color=const Color(0xFFE7DFFF);
+    for(var i=0;i<46;i++){final x=((i*73+19)%997)/997*size.width;final y=((i*47+11)%389)/389*size.height*.57;canvas.drawCircle(Offset(x,y),i%7==0?1.5:.75,star);}
+    canvas.drawCircle(Offset(size.width*.76,size.height*.59),size.width*.38,Paint()..shader=RadialGradient(colors:[const Color(0xFFFFC1A2).withOpacity(.55),Colors.transparent]).createShader(Rect.fromCircle(center:Offset(size.width*.76,size.height*.59),radius:size.width*.38)));
+    Path ridge(double y,double a,double b,double c)=>Path()..moveTo(0,size.height*y)..lineTo(size.width*.18,size.height*a)..lineTo(size.width*.34,size.height*(a-.12))..lineTo(size.width*.52,size.height*b)..lineTo(size.width*.72,size.height*(b-.08))..lineTo(size.width*.88,size.height*c)..lineTo(size.width,size.height*(c+.04))..lineTo(size.width,size.height)..lineTo(0,size.height)..close();
+    canvas.drawPath(ridge(.72,.49,.62,.53),Paint()..color=const Color(0xFF28375F));
+    canvas.drawPath(ridge(.82,.61,.72,.64),Paint()..color=const Color(0xFF111D3D));
+    canvas.drawRect(Rect.fromLTWH(0,size.height*.72,size.width,size.height*.28),Paint()..shader=const LinearGradient(colors:[Color(0xFF27365E),Color(0xFF111B38)]).createShader(Rect.fromLTWH(0,size.height*.72,size.width,size.height*.28)));
+    final reflection=Paint()..color=const Color(0xFFFFB58E).withOpacity(.26)..strokeWidth=2;
+    for(var i=0;i<15;i++){final y=size.height*(.76+i*.014),w=size.width*(.08+(i%4)*.045);canvas.drawLine(Offset(size.width*.65-w,y),Offset(size.width*.65+w,y),reflection);}
+    final x=size.width*.77,y=size.height*.66;
+    canvas.drawPath(Path()..moveTo(x-size.width*.09,y)..lineTo(x,y-size.height*.105)..lineTo(x+size.width*.1,y)..close(),Paint()..color=const Color(0xFF10172D));
+    canvas.drawRect(Rect.fromLTWH(x-size.width*.073,y,size.width*.146,size.height*.105),Paint()..color=const Color(0xFF18213B));
+    final lit=Paint()..color=const Color(0xFFFFC47C)..maskFilter=const MaskFilter.blur(BlurStyle.normal,5);
+    canvas.drawRect(Rect.fromLTWH(x-size.width*.045,y+size.height*.035,size.width*.027,size.height*.035),lit);
+    canvas.drawRect(Rect.fromLTWH(x+size.width*.018,y+size.height*.035,size.width*.027,size.height*.035),lit);
+  }
+  @override bool shouldRepaint(covariant CustomPainter oldDelegate)=>false;
+}
+
 class HomeScreen extends StatelessWidget {
-  final List<Book> books;
-  final VoidCallback onOpenBooks;
-
-  const HomeScreen({
-    super.key,
-    required this.books,
-    required this.onOpenBooks,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final totalWords = books.fold<int>(
-      0,
-      (total, book) => total + book.totalWords,
-    );
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Writers Haven')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Text(
-            'Welcome back, writer.',
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
-          const SizedBox(height: 8),
-          const Text('Your stories deserve a place to grow.'),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'My Books',
-                  value: '${books.length}',
-                  icon: Icons.menu_book,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _StatCard(
-                  label: 'Words Written',
-                  value: '$totalWords',
-                  icon: Icons.edit_note,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Your writing space',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Create books, organise chapters, and keep writing. '
-                    'Your changes are saved on this phone.',
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton.icon(
-                    onPressed: onOpenBooks,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Open My Books'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Recent books',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          if (books.isEmpty)
-            const Card(
-              child: ListTile(
-                leading: Icon(Icons.auto_stories),
-                title: Text('No books yet'),
-                subtitle: Text('Create your first story in My Books.'),
-              ),
-            )
-          else
-            ...books.reversed.take(3).map(
-                  (book) => Card(
-                    child: ListTile(
-                      leading: const Icon(Icons.menu_book),
-                      title: Text(book.title),
-                      subtitle: Text(
-                        '${book.chapters.length} chapters · '
-                        '${book.totalWords} words',
-                      ),
-                    ),
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
+ final List<Book> books; final VoidCallback onOpenBooks,onOpenCalendar,onOpenLibrary;
+ const HomeScreen({super.key,required this.books,required this.onOpenBooks,required this.onOpenCalendar,required this.onOpenLibrary});
+ @override Widget build(BuildContext context){
+  final words=books.fold<int>(0,(n,b)=>n+b.totalWords);final recent=books.reversed.take(3).toList();
+  return Scaffold(body:ListView(padding:const EdgeInsets.fromLTRB(16,12,16,28),children:[
+   ClipRRect(borderRadius:BorderRadius.circular(22),child:SizedBox(height:210,child:Stack(fit:StackFit.expand,children:[CustomPaint(painter:_NightLandscapePainter()),DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.black.withOpacity(.08),const Color(0xFF090F25).withOpacity(.78)]))),Positioned(top:8,right:8,child:Row(children:[IconButton(onPressed:()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('You are all caught up.'))),icon:const Icon(Icons.notifications_none_rounded,color:Colors.white)),IconButton(onPressed:onOpenLibrary,icon:const Icon(Icons.settings_outlined,color:Colors.white))])),const Positioned(left:18,bottom:17,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Icon(Icons.auto_stories_rounded,size:35,color:Color(0xFFFFD0B1)),SizedBox(height:5),Text('Writers Haven',style:TextStyle(fontSize:25,fontWeight:FontWeight.w700,color:Colors.white)),Text('Your story matters',style:TextStyle(color:Color(0xFFE3DDFB),letterSpacing:1.2))]))]))),
+   const SizedBox(height:18),Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Good morning,',style:TextStyle(color:Colors.white70)),Text('Writer 👑',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w800)),const Text('Small steps. Big stories.',style:TextStyle(color:Color(0xFFADB8D2)))]))]),
+   const SizedBox(height:14),Container(padding:const EdgeInsets.all(17),decoration:BoxDecoration(gradient:const LinearGradient(colors:[Color(0xFF25205C),Color(0xFF172B50)]),borderRadius:BorderRadius.circular(20),border:Border.all(color:const Color(0xFF51468F))),child:Row(children:[const CircleAvatar(radius:24,backgroundColor:Color(0xFF7560FF),child:Icon(Icons.auto_stories,color:Colors.white)),const SizedBox(width:13),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Your writing progress',style:TextStyle(color:Color(0xFFC9C0FF))),const SizedBox(height:4),Text('$words words written',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),const Icon(Icons.trending_up,color:Color(0xFFB9A6FF),size:28)])),
+   const SizedBox(height:16),GridView.count(crossAxisCount:2,shrinkWrap:true,physics:const NeverScrollableScrollPhysics(),crossAxisSpacing:12,mainAxisSpacing:12,childAspectRatio:1.22,children:[_HomeAction(icon:Icons.menu_book_rounded,title:'My Stories',subtitle:'Manage your stories',onTap:onOpenBooks),_HomeAction(icon:Icons.calendar_month_rounded,title:'Calendar',subtitle:'Plan your writing',onTap:onOpenCalendar),_HomeAction(icon:Icons.edit_note_rounded,title:'Drafts',subtitle:'Continue where you left off',onTap:onOpenBooks),_HomeAction(icon:Icons.local_library_rounded,title:'Library',subtitle:'Your saved resources',onTap:onOpenLibrary)]),
+   const SizedBox(height:20),Row(children:[Expanded(child:Text('Recent Stories',style:Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))),TextButton(onPressed:onOpenBooks,child:const Text('See all  ›'))]),
+   if(recent.isEmpty)const Card(child:ListTile(leading:Icon(Icons.auto_stories),title:Text('Your first story starts here'),subtitle:Text('Tap My Stories to create a book.')))else ...recent.map((b)=>_StoryTile(book:b,onTap:onOpenBooks)),
+  ]));
+ }
 }
-
-class _StatCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _StatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, size: 28),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            Text(label),
-          ],
-        ),
-      ),
-    );
-  }
+class _HomeAction extends StatelessWidget{final IconData icon;final String title,subtitle;final VoidCallback onTap;const _HomeAction({required this.icon,required this.title,required this.subtitle,required this.onTap});@override Widget build(BuildContext context)=>Material(color:const Color(0xFF101B32),borderRadius:BorderRadius.circular(18),child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(18),child:Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(borderRadius:BorderRadius.circular(18),border:Border.all(color:const Color(0xFF293B64))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,size:29,color:const Color(0xFFB49AFF)),const Spacer(),Text(title,style:const TextStyle(fontWeight:FontWeight.bold)),const SizedBox(height:3),Text(subtitle,style:const TextStyle(fontSize:11,color:Color(0xFF9AA7C4)))]))));
 }
+class _StoryTile extends StatelessWidget{final Book book;final VoidCallback onTap;const _StoryTile({required this.book,required this.onTap});@override Widget build(BuildContext context)=>Card(clipBehavior:Clip.antiAlias,child:ListTile(onTap:onTap,contentPadding:const EdgeInsets.symmetric(horizontal:12,vertical:7),leading:ClipRRect(borderRadius:BorderRadius.circular(9),child:SizedBox(width:55,height:66,child:CustomPaint(painter:_NightLandscapePainter(),child:const Icon(Icons.auto_stories_rounded,color:Colors.white)))),title:Text(book.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text('${book.chapters.length} chapters · ${book.totalWords} words'),trailing:const Icon(Icons.more_vert,color:Color(0xFF9AA7C4))));}
+
+// -------------------- BOOKSHELF --------------------
+
+// -------------------- BOOKSHELF --------------------
 
 // -------------------- BOOKSHELF --------------------
 
@@ -562,6 +547,7 @@ class BooksScreen extends StatelessWidget {
   final void Function(Book, Chapter) onDeleteChapter;
   final void Function(Book, Chapter, String) onUpdateChapterTitle;
   final void Function(Book, Chapter, String) onUpdateChapterContent;
+  final ValueChanged<Book> onToggleFavorite;
 
   const BooksScreen({
     super.key,
@@ -574,6 +560,7 @@ class BooksScreen extends StatelessWidget {
     required this.onDeleteChapter,
     required this.onUpdateChapterTitle,
     required this.onUpdateChapterContent,
+    required this.onToggleFavorite,
   });
 
   Future<void> showCreateBookDialog(BuildContext context) async {
@@ -617,6 +604,23 @@ class BooksScreen extends StatelessWidget {
         title: const Text('My Books'),
         actions: [
           IconButton(
+            tooltip: 'Search stories',
+            icon: const Icon(Icons.search),
+            onPressed: () async {
+              final selected = await showSearch<Book?>(context: context, delegate: _BookSearchDelegate(books));
+              if (selected == null || !context.mounted) return;
+              Navigator.push(context, MaterialPageRoute<void>(builder: (_) => BookWorkspace(
+                book: selected,
+                onUpdateBookTitle: (value) => onUpdateBookTitle(selected, value),
+                onUpdateBookDescription: (value) => onUpdateBookDescription(selected, value),
+                onAddChapter: () => onAddChapter(selected),
+                onDeleteChapter: (chapter) => onDeleteChapter(selected, chapter),
+                onUpdateChapterTitle: (chapter, value) => onUpdateChapterTitle(selected, chapter, value),
+                onUpdateChapterContent: (chapter, value) => onUpdateChapterContent(selected, chapter, value),
+              )));
+            },
+          ),
+          IconButton(
             onPressed: () => showCreateBookDialog(context),
             tooltip: 'Create book',
             icon: const Icon(Icons.add),
@@ -658,50 +662,93 @@ class BooksScreen extends StatelessWidget {
                 final book = books[index];
 
                 return Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.menu_book),
-                    ),
-                    title: Text(book.title),
-                    subtitle: Text(
-                      '${book.chapters.length} chapters · '
-                      '${book.totalWords} words',
-                    ),
-                    trailing: IconButton(
-                      tooltip: 'Delete book',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () => confirmDeleteBook(context, book),
-                    ),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute<void>(
                           builder: (_) => BookWorkspace(
                             book: book,
-                            onUpdateBookTitle: (title) =>
-                                onUpdateBookTitle(book, title),
-                            onUpdateBookDescription: (description) =>
-                                onUpdateBookDescription(book, description),
+                            onUpdateBookTitle: (title) => onUpdateBookTitle(book, title),
+                            onUpdateBookDescription: (description) => onUpdateBookDescription(book, description),
                             onAddChapter: () => onAddChapter(book),
-                            onDeleteChapter: (chapter) =>
-                                onDeleteChapter(book, chapter),
-                            onUpdateChapterTitle: (chapter, title) =>
-                                onUpdateChapterTitle(book, chapter, title),
-                            onUpdateChapterContent: (chapter, content) =>
-                                onUpdateChapterContent(
-                                  book,
-                                  chapter,
-                                  content,
-                                ),
+                            onDeleteChapter: (chapter) => onDeleteChapter(book, chapter),
+                            onUpdateChapterTitle: (chapter, title) => onUpdateChapterTitle(book, chapter, title),
+                            onUpdateChapterContent: (chapter, content) => onUpdateChapterContent(book, chapter, content),
                           ),
                         ),
                       );
                     },
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: SizedBox(
+                            width: 68,
+                            height: 82,
+                            child: Stack(fit: StackFit.expand, children: [
+                              CustomPaint(painter: _NightLandscapePainter()),
+                              const Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding: EdgeInsets.only(bottom: 7),
+                                  child: Icon(Icons.auto_stories, color: Colors.white, size: 23),
+                                ),
+                              ),
+                            ]),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          Text(book.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          const SizedBox(height: 5),
+                          Text('${book.chapters.length} chapters · ${book.totalWords} words', style: const TextStyle(color: Color(0xFF9AA7C4), fontSize: 12)),
+                          const SizedBox(height: 9),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(color: const Color(0xFF174C50), borderRadius: BorderRadius.circular(20)),
+                            child: const Text('In Progress', style: TextStyle(color: Color(0xFF9CE6D8), fontSize: 10)),
+                          ),
+                        ])),
+                        IconButton(
+                          tooltip: book.isFavorite ? 'Remove favourite' : 'Add favourite',
+                          icon: Icon(book.isFavorite ? Icons.favorite : Icons.favorite_border, color: book.isFavorite ? const Color(0xFFFF8BA7) : null),
+                          onPressed: () => onToggleFavorite(book),
+                        ),
+                        IconButton(
+                          tooltip: 'Delete book',
+                          icon: const Icon(Icons.more_vert),
+                          onPressed: () => confirmDeleteBook(context, book),
+                        ),
+                      ]),
+                    ),
                   ),
                 );
               },
             ),
     );
+  }
+}
+
+class _BookSearchDelegate extends SearchDelegate<Book?> {
+  final List<Book> books;
+  _BookSearchDelegate(this.books);
+  @override List<Widget> buildActions(BuildContext context) => [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
+  @override Widget buildLeading(BuildContext context) => IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, null));
+  @override Widget buildResults(BuildContext context) => _buildMatches();
+  @override Widget buildSuggestions(BuildContext context) => _buildMatches();
+  Widget _buildMatches() {
+    final matches = books.where((book) => book.title.toLowerCase().contains(query.toLowerCase()) || book.description.toLowerCase().contains(query.toLowerCase())).toList()..sort((a, b) {
+      if (a.isFavorite != b.isFavorite) return a.isFavorite ? -1 : 1;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    if (matches.isEmpty) return const Center(child: Text('No matching stories'));
+    return ListView.builder(itemCount: matches.length, itemBuilder: (context, index) {
+      final book = matches[index];
+      return ListTile(leading: Icon(book.isFavorite ? Icons.favorite : Icons.menu_book, color: book.isFavorite ? const Color(0xFFFF8BA7) : null), title: Text(book.title), subtitle: Text(book.chapters.length.toString() + ' chapters · ' + book.totalWords.toString() + ' words'), onTap: () => close(context, book));
+    });
   }
 }
 
@@ -863,6 +910,12 @@ class _BookWorkspaceState extends State<BookWorkspace> {
     setState(() => _loadChapter(chapter));
   }
 
+  Future<void> _exportBookAsText() async {
+    final output = StringBuffer()..writeln(widget.book.title)..writeln(widget.book.description)..writeln();
+    for (final item in widget.book.chapters) { output.writeln(item.title); output.writeln(item.content); output.writeln(); }
+    await SharePlus.instance.share(ShareParams(title: 'Export ' + widget.book.title, text: output.toString()));
+  }
+
   void _addChapter() {
     widget.onAddChapter();
 
@@ -957,6 +1010,11 @@ class _BookWorkspaceState extends State<BookWorkspace> {
             tooltip: 'Edit book details',
             onPressed: _editBookDetails,
             icon: const Icon(Icons.edit_outlined),
+          ),
+          IconButton(
+            tooltip: 'Export story as text',
+            onPressed: _exportBookAsText,
+            icon: const Icon(Icons.ios_share_outlined),
           ),
           IconButton(
             tooltip: 'Add chapter',
@@ -1180,143 +1238,54 @@ class _EditBookDialogState extends State<_EditBookDialog> {
   }
 }
 
-// -------------------- SIMPLE SCREENS --------------------
-
-class SimpleScreen extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-
-  const SimpleScreen({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-  });
-
+class WritingInsightsScreen extends StatelessWidget {
+  final List<Book> books;
+  const WritingInsightsScreen({super.key, required this.books});
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 64),
-              const SizedBox(height: 16),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 8),
-              Text(subtitle, textAlign: TextAlign.center),
-              const SizedBox(height: 12),
-              const Text(
-                'This section is not fully implemented yet.',
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+    final words = books.fold<int>(0, (sum, book) => sum + book.totalWords);
+    final chapters = books.fold<int>(0, (sum, book) => sum + book.chapters.length);
+    final favourites = books.where((book) => book.isFavorite).length;
+    final ranked = [...books]..sort((a, b) => b.totalWords.compareTo(a.totalWords));
+    Widget metric(String label, String value, IconData icon) => Expanded(child: Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: const Color(0xFFB9A6FF)), const SizedBox(height: 10), Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), Text(label, style: const TextStyle(color: Color(0xFF9AA7C4), fontSize: 12))]))));
+    return Scaffold(appBar: AppBar(title: const Text('Writing Insights')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      Text('Your creative progress', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 6), const Text('A snapshot of the stories you have built in Writer’s Haven.', style: TextStyle(color: Color(0xFFADB8D2))),
+      const SizedBox(height: 16), Row(children: [metric('Total words', words.toString(), Icons.edit_note), metric('Stories', books.length.toString(), Icons.menu_book)]),
+      Row(children: [metric('Chapters', chapters.toString(), Icons.library_books), metric('Favourites', favourites.toString(), Icons.favorite)]),
+      const SizedBox(height: 14), Text('Most written stories', style: Theme.of(context).textTheme.titleLarge),
+      if (ranked.isEmpty) const Card(child: ListTile(title: Text('Your writing stats will appear here'), subtitle: Text('Create a story and start writing to see your progress.')))
+      else ...ranked.take(5).map((book) => Card(child: ListTile(leading: const Icon(Icons.auto_stories, color: Color(0xFFB9A6FF)), title: Text(book.title), subtitle: Text(book.chapters.length.toString() + ' chapters'), trailing: Text(book.totalWords.toString() + ' words')))),
+    ]));
+  }
+}
+
+// -------------------- SIMPLE SCREENS --------------------
+
+class LibraryScreen extends StatelessWidget { const LibraryScreen({super.key});
+  @override Widget build(BuildContext context) {
+    final resources=[(Icons.tips_and_updates,'Writing Tips','Improve your writing skills','Build a daily writing habit. Start scenes with a clear moment, keep dialogue natural, and revise after the first draft.'),(Icons.person_search,'Character Builder','Create memorable characters','Give every character a goal, a strength, a weakness, and something they are afraid to lose.'),(Icons.auto_awesome,'Plot Ideas','Never run out of ideas','A stranger leaves a letter at the wrong door. The person who receives it discovers a secret that changes their town.'),(Icons.public,'World Building','Build rich story worlds','Decide how the world works: its places, history, rules, culture, and what happens when someone breaks those rules.'),(Icons.edit_note,'Writing Prompts','Get inspired','Write about a promise made years ago that must finally be kept today.'),(Icons.favorite_border,'Favourites','Saved for later','Your favourite writing resources will appear here as you save them.')];
+    return Scaffold(appBar:AppBar(title:const Text('Library')),body:ListView(padding:const EdgeInsets.all(16),children:[Text('Grow your craft',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.bold)),const SizedBox(height:5),const Text('Tools and inspiration for your next great story.',style:TextStyle(color:Color(0xFFADB8D2))),const SizedBox(height:18),...resources.map((item)=>Card(child:ExpansionTile(leading:CircleAvatar(backgroundColor:const Color(0xFF30276B),child:Icon(item.$1,color:const Color(0xFFB9A6FF))),title:Text(item.$2,style:const TextStyle(fontWeight:FontWeight.w600)),subtitle:Text(item.$3),children:[Padding(padding:const EdgeInsets.fromLTRB(72,0,16,18),child:Text(item.$4))])))]));
   }
 }
 
 // -------------------- PROFILE AND SETTINGS --------------------
 
+// -------------------- PROFILE AND SETTINGS --------------------
+
 class ProfileScreen extends StatelessWidget {
-  final int selectedTheme;
-  final ValueChanged<int> onThemeChanged;
-  final bool saveFailed;
-
-  const ProfileScreen({
-    super.key,
-    required this.selectedTheme,
-    required this.onThemeChanged,
-    required this.saveFailed,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Profile & Settings')),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const CircleAvatar(
-            radius: 38,
-            child: Icon(Icons.person, size: 42),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'Writer',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Make yourself at home. Your stories start here.',
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 28),
-          Text(
-            'Appearance',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          const Text('Choose the colour theme for your writing space.'),
-          const SizedBox(height: 12),
-          ...List.generate(havenThemes.length, (index) {
-            final theme = havenThemes[index];
-
-            return Card(
-              child: RadioListTile<int>(
-                value: index,
-                groupValue: selectedTheme,
-                onChanged: (value) {
-                  if (value != null) onThemeChanged(value);
-                },
-                secondary: CircleAvatar(
-                  radius: 14,
-                  backgroundColor: theme.color,
-                ),
-                title: Text(theme.name),
-              ),
-            );
-          }),
-          const SizedBox(height: 20),
-          Card(
-            child: ListTile(
-              leading: Icon(
-                saveFailed ? Icons.warning_amber : Icons.save_outlined,
-              ),
-              title: const Text('Writing storage'),
-              subtitle: Text(
-                saveFailed
-                    ? 'Cloud sync needs attention. Check your connection and try again.'
-                    : 'Your books are saved to your account and synced across devices.',
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          FilledButton.tonalIcon(
-            onPressed: () async {
-              await Supabase.instance.client.auth.signOut();
-            },
-            icon: const Icon(Icons.logout),
-            label: const Text('Sign out'),
-          ),
-          const SizedBox(height: 12),
-          const Text('Writers Haven', textAlign: TextAlign.center),
-          const Text(
-            'A home for your stories.',
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
+ final int selectedTheme;final ValueChanged<int> onThemeChanged;final bool saveFailed;
+ const ProfileScreen({super.key,required this.selectedTheme,required this.onThemeChanged,required this.saveFailed});
+ @override Widget build(BuildContext context)=>Scaffold(appBar:AppBar(title:const Text('Profile')),body:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,28),children:[
+  ClipRRect(borderRadius:BorderRadius.circular(24),child:SizedBox(height:185,child:Stack(fit:StackFit.expand,children:[CustomPaint(painter:_NightLandscapePainter()),DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Colors.transparent,const Color(0xFF080F20).withOpacity(.9)]))),const Positioned(left:0,right:0,bottom:14,child:Column(children:[CircleAvatar(radius:39,backgroundColor:Color(0xFF161E42),child:CircleAvatar(radius:35,backgroundColor:Color(0xFF7560FF),child:Text('W',style:TextStyle(fontSize:34,fontWeight:FontWeight.bold,color:Colors.white)))),SizedBox(height:8),Text('Writer 👑',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold,color:Colors.white)),Text('Writer · Dreamer · Creator',style:TextStyle(color:Color(0xFFD3C9F3),fontSize:12))]))]))),
+  const SizedBox(height:14),Row(children:[const _ProfileStat(value:'0',label:'Stories'),const _ProfileStat(value:'0',label:'Followers'),const _ProfileStat(value:'0',label:'Following')]),
+  const SizedBox(height:18),const Text('Turning ideas into stories. Building a better tomorrow, one chapter at a time.',textAlign:TextAlign.center,style:TextStyle(color:Color(0xFFB9C2D8))),const SizedBox(height:18),
+  Card(child:ListTile(leading:const Icon(Icons.person_outline),title:const Text('Account'),subtitle:const Text('Guest workspace · no sign-in required'),trailing:const Icon(Icons.chevron_right),onTap:()=>showDialog<void>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Guest workspace'),content:const Text('Write without creating an account. Your stories stay on this device.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('OK'))])))),
+  Card(child:ListTile(leading:const Icon(Icons.notifications_none),title:const Text('Notifications'),subtitle:const Text('Writing reminders and calendar alerts'),trailing:const Icon(Icons.chevron_right),onTap:()=>ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Manage writing reminders in Calendar.'))))),
+  const SizedBox(height:12),Text('Appearance',style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:8),...List.generate(havenThemes.length,(i){final t=havenThemes[i];return Card(child:RadioListTile<int>(value:i,groupValue:selectedTheme,onChanged:(v){if(v!=null)onThemeChanged(v);},secondary:CircleAvatar(radius:14,backgroundColor:t.color),title:Text(t.name)));}),
+  Card(child:ListTile(leading:Icon(saveFailed?Icons.warning_amber:Icons.save_outlined),title:const Text('Data & Storage'),subtitle:Text(saveFailed?'Local save needs attention.':'Your stories are saved on this device.'))),
+  const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Your creative space, always within reach.'))),
+  const SizedBox(height:14),const Center(child:Text('WRITERS HAVEN  ·  YOUR STORY MATTERS',style:TextStyle(fontSize:10,letterSpacing:2,color:Color(0xFF8994B2)))),
+ ]));
 }
+class _ProfileStat extends StatelessWidget{final String value,label;const _ProfileStat({required this.value,required this.label});@override Widget build(BuildContext context)=>Expanded(child:Container(margin:const EdgeInsets.symmetric(horizontal:4),padding:const EdgeInsets.symmetric(vertical:13),decoration:BoxDecoration(color:const Color(0xFF101B32),borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFF293B64))),child:Column(children:[Text(value,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const SizedBox(height:3),Text(label,style:const TextStyle(fontSize:11,color:Color(0xFF9AA7C4)))])));}
