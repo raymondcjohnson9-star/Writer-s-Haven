@@ -470,15 +470,16 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                     label: 'Library',
                   ),
                   NavigationDestination(
-                    icon: Icon(Icons.insights_outlined),
-                    selectedIcon: Icon(Icons.insights),
-                    label: 'Insights',
-                  ),
-                  NavigationDestination(
                     icon: Icon(Icons.person_outline),
                     selectedIcon: Icon(Icons.person),
                     label: 'Profile',
                   ),
+                  NavigationDestination(
+                    icon: Icon(Icons.insights_outlined),
+                    selectedIcon: Icon(Icons.insights),
+                    label: 'Insights',
+                  ),
+
                 ],
               ),
             ),
@@ -603,6 +604,23 @@ class BooksScreen extends StatelessWidget {
         title: const Text('My Books'),
         actions: [
           IconButton(
+            tooltip: 'Search stories',
+            icon: const Icon(Icons.search),
+            onPressed: () async {
+              final selected = await showSearch<Book?>(context: context, delegate: _BookSearchDelegate(books));
+              if (selected == null || !context.mounted) return;
+              Navigator.push(context, MaterialPageRoute<void>(builder: (_) => BookWorkspace(
+                book: selected,
+                onUpdateBookTitle: (value) => onUpdateBookTitle(selected, value),
+                onUpdateBookDescription: (value) => onUpdateBookDescription(selected, value),
+                onAddChapter: () => onAddChapter(selected),
+                onDeleteChapter: (chapter) => onDeleteChapter(selected, chapter),
+                onUpdateChapterTitle: (chapter, value) => onUpdateChapterTitle(selected, chapter, value),
+                onUpdateChapterContent: (chapter, value) => onUpdateChapterContent(selected, chapter, value),
+              )));
+            },
+          ),
+          IconButton(
             onPressed: () => showCreateBookDialog(context),
             tooltip: 'Create book',
             icon: const Icon(Icons.add),
@@ -711,6 +729,26 @@ class BooksScreen extends StatelessWidget {
               },
             ),
     );
+  }
+}
+
+class _BookSearchDelegate extends SearchDelegate<Book?> {
+  final List<Book> books;
+  _BookSearchDelegate(this.books);
+  @override List<Widget> buildActions(BuildContext context) => [IconButton(icon: const Icon(Icons.clear), onPressed: () => query = '')];
+  @override Widget buildLeading(BuildContext context) => IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => close(context, null));
+  @override Widget buildResults(BuildContext context) => _buildMatches();
+  @override Widget buildSuggestions(BuildContext context) => _buildMatches();
+  Widget _buildMatches() {
+    final matches = books.where((book) => book.title.toLowerCase().contains(query.toLowerCase()) || book.description.toLowerCase().contains(query.toLowerCase())).toList()..sort((a, b) {
+      if (a.isFavorite != b.isFavorite) return a.isFavorite ? -1 : 1;
+      return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+    });
+    if (matches.isEmpty) return const Center(child: Text('No matching stories'));
+    return ListView.builder(itemCount: matches.length, itemBuilder: (context, index) {
+      final book = matches[index];
+      return ListTile(leading: Icon(book.isFavorite ? Icons.favorite : Icons.menu_book, color: book.isFavorite ? const Color(0xFFFF8BA7) : null), title: Text(book.title), subtitle: Text(book.chapters.length.toString() + ' chapters · ' + book.totalWords.toString() + ' words'), onTap: () => close(context, book));
+    });
   }
 }
 
