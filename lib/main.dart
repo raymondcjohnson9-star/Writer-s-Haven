@@ -1,6 +1,7 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -87,12 +88,14 @@ class Book {
   String title;
   String description;
   List<Chapter> chapters;
+  bool isFavorite;
 
   Book({
     required this.id,
     required this.title,
     this.description = '',
     List<Chapter>? chapters,
+    this.isFavorite = false,
   }) : chapters = chapters ?? [];
 
   int get totalWords => chapters.fold<int>(
@@ -105,6 +108,7 @@ class Book {
         'title': title,
         'description': description,
         'chapters': chapters.map((chapter) => chapter.toJson()).toList(),
+        'isFavorite': isFavorite,
       };
 
   factory Book.fromJson(Map<String, dynamic> json) {
@@ -114,6 +118,7 @@ class Book {
       id: (json['id'] as num?)?.toInt() ?? 0,
       title: json['title'] as String? ?? 'Untitled Book',
       description: json['description'] as String? ?? '',
+      isFavorite: json['isFavorite'] as bool? ?? false,
       chapters: savedChapters
           .map(
             (item) => Chapter.fromJson(
@@ -314,6 +319,11 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
     scheduleSave();
   }
 
+  void toggleFavorite(Book book) {
+    setState(() => book.isFavorite = !book.isFavorite);
+    scheduleSave();
+  }
+
   @override
   void dispose() {
     saveTimer?.cancel();
@@ -341,6 +351,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onDeleteChapter: deleteChapter,
         onUpdateChapterTitle: updateChapterTitle,
         onUpdateChapterContent: updateChapterContent,
+        onToggleFavorite: toggleFavorite,
       ),
       const CalendarScreen(userId: 'guest'),
       const LibraryScreen(),
@@ -349,6 +360,7 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
         onThemeChanged: changeTheme,
         saveFailed: saveFailed,
       ),
+      WritingInsightsScreen(books: books),
     ];
 
     return MaterialApp(
@@ -458,6 +470,11 @@ class _WritersHavenAppState extends State<WritersHavenApp> {
                     label: 'Library',
                   ),
                   NavigationDestination(
+                    icon: Icon(Icons.insights_outlined),
+                    selectedIcon: Icon(Icons.insights),
+                    label: 'Insights',
+                  ),
+                  NavigationDestination(
                     icon: Icon(Icons.person_outline),
                     selectedIcon: Icon(Icons.person),
                     label: 'Profile',
@@ -529,6 +546,7 @@ class BooksScreen extends StatelessWidget {
   final void Function(Book, Chapter) onDeleteChapter;
   final void Function(Book, Chapter, String) onUpdateChapterTitle;
   final void Function(Book, Chapter, String) onUpdateChapterContent;
+  final ValueChanged<Book> onToggleFavorite;
 
   const BooksScreen({
     super.key,
@@ -541,6 +559,7 @@ class BooksScreen extends StatelessWidget {
     required this.onDeleteChapter,
     required this.onUpdateChapterTitle,
     required this.onUpdateChapterContent,
+    required this.onToggleFavorite,
   });
 
   Future<void> showCreateBookDialog(BuildContext context) async {
@@ -675,6 +694,11 @@ class BooksScreen extends StatelessWidget {
                             child: const Text('In Progress', style: TextStyle(color: Color(0xFF9CE6D8), fontSize: 10)),
                           ),
                         ])),
+                        IconButton(
+                          tooltip: book.isFavorite ? 'Remove favourite' : 'Add favourite',
+                          icon: Icon(book.isFavorite ? Icons.favorite : Icons.favorite_border, color: book.isFavorite ? const Color(0xFFFF8BA7) : null),
+                          onPressed: () => onToggleFavorite(book),
+                        ),
                         IconButton(
                           tooltip: 'Delete book',
                           icon: const Icon(Icons.more_vert),
@@ -1162,6 +1186,28 @@ class _EditBookDialogState extends State<_EditBookDialog> {
         ),
       ],
     );
+  }
+}
+
+class WritingInsightsScreen extends StatelessWidget {
+  final List<Book> books;
+  const WritingInsightsScreen({super.key, required this.books});
+  @override
+  Widget build(BuildContext context) {
+    final words = books.fold<int>(0, (sum, book) => sum + book.totalWords);
+    final chapters = books.fold<int>(0, (sum, book) => sum + book.chapters.length);
+    final favourites = books.where((book) => book.isFavorite).length;
+    final ranked = [...books]..sort((a, b) => b.totalWords.compareTo(a.totalWords));
+    Widget metric(String label, String value, IconData icon) => Expanded(child: Card(child: Padding(padding: const EdgeInsets.all(14), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Icon(icon, color: const Color(0xFFB9A6FF)), const SizedBox(height: 10), Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)), Text(label, style: const TextStyle(color: Color(0xFF9AA7C4), fontSize: 12))]))));
+    return Scaffold(appBar: AppBar(title: const Text('Writing Insights')), body: ListView(padding: const EdgeInsets.all(16), children: [
+      Text('Your creative progress', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+      const SizedBox(height: 6), const Text('A snapshot of the stories you have built in Writer’s Haven.', style: TextStyle(color: Color(0xFFADB8D2))),
+      const SizedBox(height: 16), Row(children: [metric('Total words', words.toString(), Icons.edit_note), metric('Stories', books.length.toString(), Icons.menu_book)]),
+      Row(children: [metric('Chapters', chapters.toString(), Icons.library_books), metric('Favourites', favourites.toString(), Icons.favorite)]),
+      const SizedBox(height: 14), Text('Most written stories', style: Theme.of(context).textTheme.titleLarge),
+      if (ranked.isEmpty) const Card(child: ListTile(title: Text('Your writing stats will appear here'), subtitle: Text('Create a story and start writing to see your progress.')))
+      else ...ranked.take(5).map((book) => Card(child: ListTile(leading: const Icon(Icons.auto_stories, color: Color(0xFFB9A6FF)), title: Text(book.title), subtitle: Text(book.chapters.length.toString() + ' chapters'), trailing: Text(book.totalWords.toString() + ' words')))),
+    ]));
   }
 }
 
